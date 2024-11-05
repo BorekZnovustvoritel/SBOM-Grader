@@ -91,5 +91,43 @@ def non_main_packageFileName(doc: dict):
     for package in doc.get("packages", []):
         if package["SPDXID"] in main_package_SPDXIDs:
             continue
-        assert "packageFileName" in package, f"Check failed for package {package["SPDXID"]}"
+        assert (
+            "packageFileName" in package
+        ), f"Check failed for package {package["SPDXID"]}"
 
+
+def purl_has_repo_and_tag_qualifiers(purl: str):
+    purl = PackageURL.from_string(purl)
+    assert "repository_url" in purl.qualifiers
+    assert "tag" in purl.qualifiers
+
+
+def main_element_cpe22(doc: dict):
+    for main_package in _get_main_packages(doc):
+        assert any(
+            ref.get("referenceType") == "cpe22Type"
+            for ref in main_package.get("externalRefs")
+        ), f"Package does not have cpe22Type: {main_package['SPDXID']}"
+
+
+def non_main_repo_arch_qualifiers(doc: dict):
+    main_package_SPDXIDs = {p.get("SPDXID") for p in _get_main_packages(doc)}
+    for package in doc.get("packages", []):
+        if package["SPDXID"] in main_package_SPDXIDs:
+            continue
+        purl_dicts = filter(
+            lambda x: x.get("referenceType") == "purl", package.get("externalRefs")
+        )
+        purls = [purl_dict.get("referenceLocator") for purl_dict in purl_dicts]
+
+        found_correct = False
+        for purl in purls:
+            purl_obj = PackageURL.from_string(purl)
+            found_correct = (
+                "repository_id" in purl_obj.qualifiers and "arch" in purl_obj.qualifiers
+            )
+            if found_correct:
+                break
+        assert (
+            found_correct
+        ), f"Package {package['SPDXID']} does not have a purl with 'arch' and 'repository_id' qualifiers."

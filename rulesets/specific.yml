@@ -4,7 +4,6 @@ rules:
     failureMessage: Not enough packages.
     implementations:
       - name: spdx23
-        skippable: false
         fieldPath: packages
         checker:
           length_gt: 1
@@ -48,5 +47,27 @@ rules:
     failureMessage: Add qualifiers repository_url and tag to every PURL.
     implementations:
       - name: spdx23
-        fieldPath: packages[&]externalRefs[] # TODO
+        fieldPath: packages[&]externalRefs[referenceType=purl]referenceLocator
         checker:
+          func_name: purl_has_repo_and_tag_qualifiers
+
+  - name: Packages have a repository_id qualifier in PURLs
+    failureMessage: Add repository_id qualifier to all package purls.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[&]externalRefs[referenceType=purl]referenceLocator
+        checker:
+          str_contains: repository_id
+
+  - name: Main element has cpe22 locator
+    failureMessage: Add cpe22Type locator to element described by SPDXRef-DOCUMENT
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: main_element_cpe22
+  - name: Non-main elements have a purl with arch and repository_id qualifiers
+    failureMessage: Add arch and repository_id qualifiers to purls where possible.
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: non_main_repo_arch_qualifiers

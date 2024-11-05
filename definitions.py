@@ -1,8 +1,6 @@
 import json
 from enum import Enum
 from pathlib import Path
-from importlib import import_module
-from types import ModuleType
 
 import yaml
 
@@ -45,9 +43,3 @@ class RuleForce(Enum):
     MAY = "MAY"
     SHOULD = "SHOULD"
     MUST = "MUST"
-
-
-class Selector(Enum):
-    ANY = "ANY"
-    ALL = "ALL"
-    LIST = "LIST"

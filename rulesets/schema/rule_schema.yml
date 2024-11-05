@@ -51,12 +51,12 @@ properties:
             properties:
               name:
                 type: string
-              skippable:
-                type: boolean
-                default: false
-                description: >-
-                  Skip the test if the field is not present at all.
-                  Does not work for fields of objects in lists.
+#              skippable:
+#                type: boolean
+#                default: false
+#                description: >-
+#                  Skip the test if the field is not present at all.
+#                  Does not work for fields of objects in lists.
               fieldPath:
                 type: string
 #              check:

@@ -3,7 +3,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sized, Generator, Union
+from typing import Any, Callable, Sized, Union
 
 from jsonschema.validators import validate
 
@@ -13,7 +13,6 @@ from definitions import (
     get_mapping,
     get_path_to_implementations,
     Implementation,
-    Selector,
     SBOM_FORMAT_DEFINITION_MAPPING,
     RuleForce,
 )
@@ -133,6 +132,15 @@ class Rule:
                     for idx, item in enumerate(doc_):
                         run_on_path(item, path[1:], path_tried + f"[{idx}]")
 
+                elif "=" in step:
+                    # Filter which fields to use
+                    assert isinstance(doc_, list), "Incorrect path to field."
+                    attr, check = step.split("=")
+                    for idx, item in enumerate(doc_):
+                        if item.get(attr, FIELD_NOT_PRESENT) != check:
+                            continue
+                        run_on_path(item, path[1:], path_tried + f"[{idx}]")
+
                 elif step.isdigit():
                     assert isinstance(doc_, list), "Incorrect path to field."
                     # Element on an index
@@ -201,7 +209,6 @@ class RuleSet:
             for spec in implementations:
                 implementation_name = spec["name"]
                 field_path = spec.get("fieldPath")
-                selector = spec.get("selector")
                 checker = spec["checker"]
                 # TODO rework for more than one operation
                 operation = next(iter(checker.keys()))
