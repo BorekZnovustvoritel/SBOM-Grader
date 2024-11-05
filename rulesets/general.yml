@@ -1,0 +1,69 @@
+---
+rules:
+  - name: Document passes schema validation.
+    failureMessage: Document did not pass schema validation.
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: validate_schema
+  - name: All named packages have a versionInfo.
+    failureMessage: Add versionInfo to all packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[&]versionInfo
+        checker:
+          neq: FIELD_NOT_PRESENT
+  - name: License list has correct form
+    failureMessage: licenseListVersion needs to have format <number>.<number>
+    implementations:
+      - name: spdx23
+        fieldPath: creationInfo.licenseListVersion
+        checker:
+          str_matches_regex: '[0-9]+\.[0-9]+'
+  - name: Creation time is valid
+    failureMessage: Fill in valid ISO 8061 creation time.
+    implementations:
+      - name: spdx23
+        fieldPath: creationInfo.created
+        checker:
+          func_name: check_datetime
+  - name: All packages are referenced in relationships
+    failureMessage: Reference all packages in relationships or remove them.
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: package_relationships
+  - name: All packages have a checksum
+    failureMessage: Add checksums to all packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[&]checksums[&]
+        skippable: false
+        checker:
+          not_in:
+            - FIELD_NOT_PRESENT
+            - {}
+  - name: All packages have a supplier
+    failureMessage: Add supplier to all packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[&]supplier
+        checker:
+          not_in:
+            - FIELD_NOT_PRESENT
+            - ""
+  - name: All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
+    failureMessage: Change files SPDXIDs to format SPDXRef-File-<filename>-<digest>.
+    implementations:
+      - name: spdx23
+        fieldPath: files.SPDXID
+        skippable: true
+        checker:
+          str_matches_regex: 'SPDXRef-File-\w+-[a-z0-9]+'
+  - name: All packages have at least one PURL
+    failureMessage: Add purl identifier to all packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[&]externalRefs[|]referenceType
+        checker:
+          eq: purl

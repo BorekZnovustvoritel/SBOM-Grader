@@ -1,0 +1,103 @@
+---
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'https://redhat.com/sbomgrader/ruleschema.json'
+title: Rule Schema
+description: A schema for describing rules for SBOM validation.
+type: object
+required:
+  - rules
+properties:
+#  implementations:
+#    type: array
+#    items:
+#      type: object
+#      properties:
+#        name:
+#          type: string
+#        filePaths:
+#          type: array
+#          items:
+#            type: string
+#      additionalProperties: false
+#      required:
+#        - name
+  rules:
+    description: The rules
+    type: array
+    items:
+      type: object
+      required:
+        - name
+        - implementations
+      properties:
+        name:
+          type: string
+        failureMessage:
+          type: string
+        force:
+          description: This can be overwritten elsewhere.
+          type: string
+          enum:
+            - MUST
+            - SHOULD
+            - MAY
+        implementations:
+          type: array
+          items:
+            type: object
+            required:
+              - name
+              - checker
+            properties:
+              name:
+                type: string
+              skippable:
+                type: boolean
+                default: false
+                description: >-
+                  Skip the test if the field is not present at all.
+                  Does not work for fields of objects in lists.
+              fieldPath:
+                type: string
+#              check:
+#                type: string
+#                enum:
+#                  - FIELD
+#                  - VALUE
+#              selector:
+#                description: >-
+#                  If the field is somehow nested in an array, specify which
+#                  field of the array to use using a filter expression. Default
+#                  is EACH.
+#                type: string
+#                enum:
+#                  - ANY
+#                  - EACH
+#                  - LIST
+#                default: ALL
+              checker:
+                type: object
+                properties:
+                  eq:
+                    description: Field should be equal to this value
+                  neq:
+                    description: Field should be not equal to this value
+                  in:
+                    type: array
+                  not_in:
+                    type: array
+                  str_startswith:
+                    type: string
+                  str_endswith:
+                    type: string
+                  str_contains:
+                    type: string
+                  str_matches_regex:
+                    type: string
+                  length:
+                    type: integer
+                  func_name:
+                    type: string
+            additionalProperties: false
+      additionalProperties: false
+additionalProperties: false
