@@ -7,9 +7,13 @@ import yaml
 ROOT_DIR: Path = Path(__file__).parent
 # RULES_DIR_NAME = "rules"
 RULESET_DIR = ROOT_DIR / "rulesets"
+COOKBOOKS_DIR = ROOT_DIR / "cookbooks"
 IMPLEMENTATION_DIR_NAME = "specification_rules"
 # IMPLEMENTATION_DIR = ROOT_DIR / RULES_DIR_NAME / IMPLEMENTATION_DIR_NAME
 RULESET_VALIDATION_SCHEMA_PATH = ROOT_DIR / "rulesets" / "schema" / "rule_schema.yml"
+COOKBOOK_VALIDATION_SCHEMA_PATH = (
+    ROOT_DIR / "cookbooks" / "schema" / "cookbook_schema.yml"
+)
 
 
 class Implementation(Enum):

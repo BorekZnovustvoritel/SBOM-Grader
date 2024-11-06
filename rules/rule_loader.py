@@ -34,6 +34,10 @@ class RuleLoader:
         self._loaded_file_references.update(self._unloaded_file_references)
         self._unloaded_file_references = set()
 
+    @property
+    def file_references(self) -> set[Path]:
+        return self._unloaded_file_references | self._loaded_file_references
+
     def load_rule(self, name: str) -> Union[Callable, None]:
         if self._unloaded_file_references:
             self._load_all_references()

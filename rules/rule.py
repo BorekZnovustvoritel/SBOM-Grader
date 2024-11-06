@@ -1,6 +1,7 @@
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
+from enum import Enum
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Sized, Union
@@ -67,6 +68,22 @@ class Document:
         raise ValueError("Document is in an unknown standard.")
 
 
+class ResultType(Enum):
+    SUCCESS = "success"
+    NOT_PRESENT = "not present"
+    FAILED = "failed"
+    ERROR = "error"
+    SKIPPED = "skipped"
+    NOT_IMPLEMENTED = "not implemented"
+
+
+@dataclass
+class ResultDetail:
+    rule_name: str
+    result_type: ResultType
+    result_detail: str | None
+
+
 @dataclass
 class Result:
     ran: set[str] = field(default_factory=set)
@@ -83,6 +100,43 @@ class Result:
             ran=self.ran | other.ran,
             errors=self.errors | other.errors,
             skipped=self.skipped | other.skipped,
+        )
+
+    def get(self, rule_name: str) -> ResultDetail:
+        if rule_name in self.failed:
+            return ResultDetail(
+                rule_name=rule_name,
+                result_type=ResultType.FAILED,
+                result_detail=self.failed[rule_name],
+            )
+        if rule_name in self.errors:
+            return ResultDetail(
+                rule_name=rule_name,
+                result_type=ResultType.ERROR,
+                result_detail=self.failed[rule_name],
+            )
+        if rule_name in self.skipped:
+            return ResultDetail(
+                rule_name=rule_name,
+                result_type=ResultType.SKIPPED,
+                result_detail="Rule was not present in the cookbook.",
+            )
+        if rule_name in self.not_implemented:
+            return ResultDetail(
+                rule_name=rule_name,
+                result_type=ResultType.NOT_IMPLEMENTED,
+                result_detail="No implementation found for the document type.",
+            )
+        if rule_name in self.ran:
+            return ResultDetail(
+                rule_name=rule_name,
+                result_type=ResultType.SUCCESS,
+                result_detail="Success.",
+            )
+        return ResultDetail(
+            rule_name=rule_name,
+            result_type=ResultType.NOT_PRESENT,
+            result_detail="Rule is not present in any RuleSet.",
         )
 
 
@@ -132,18 +186,39 @@ class Rule:
                     for idx, item in enumerate(doc_):
                         run_on_path(item, path[1:], path_tried + f"[{idx}]")
 
+                elif step == "?":
+                    # Skippable if not present
+                    assert isinstance(
+                        doc_, dict
+                    ), "Skippable fields only apply on dictionaries"
+                    if path[1:] and path[1] in doc_:
+                        run_on_path(doc_.get(path[1]), path[2:], path_tried)
+
+                elif "!=" in step:
+                    # Filter which fields to use
+                    assert isinstance(doc_, list), "Incorrect path to field."
+                    attr, check = step.split("!=")
+                    for idx, item in enumerate(doc_):
+                        if check == "FIELD_NOT_PRESENT":
+                            check = FIELD_NOT_PRESENT
+                        if item.get(attr, FIELD_NOT_PRESENT) == check:
+                            continue
+                        run_on_path(item, path[1:], path_tried + f"[{idx}]")
+
                 elif "=" in step:
                     # Filter which fields to use
                     assert isinstance(doc_, list), "Incorrect path to field."
                     attr, check = step.split("=")
                     for idx, item in enumerate(doc_):
+                        if check == "FIELD_NOT_PRESENT":
+                            check = FIELD_NOT_PRESENT
                         if item.get(attr, FIELD_NOT_PRESENT) != check:
                             continue
                         run_on_path(item, path[1:], path_tried + f"[{idx}]")
 
                 elif step.isdigit():
-                    assert isinstance(doc_, list), "Incorrect path to field."
                     # Element on an index
+                    assert isinstance(doc_, list), "Incorrect path to field."
                     run_on_path(doc_[int(step)], path[1:], path_tried + f"[{step}]")
 
                 else:
@@ -237,7 +312,6 @@ class RuleSet:
                     func=func,
                     error_message=failure_message,
                     field_path=field_path,
-                    # selector=selector,
                     skippable=spec.get("skippable", False),
                 )
         all_rule_names = {rule["name"] for rule in schema_dict["rules"]}
@@ -253,22 +327,44 @@ class RuleSet:
         implementation_loaders: dict[str, RuleLoader] | None = None,
         all_rule_names: set[str] | None = None,
         selection: set[str] | None = None,
-        weights_override: dict[str, RuleForce] | None = None,
     ):
         self.implementation_loaders = implementation_loaders or {}
         self.rules = rules or {}
         self.all_rule_names = all_rule_names or set()
         self.selection = selection or self.all_rule_names
-        self.weights_override = weights_override or {}
 
     def __add__(self, other: "RuleSet"):
         if not isinstance(other, RuleSet):
             raise TypeError(f"Cannot combine RuleSet with instance of {type(other)}!")
+        implementation_loaders = {}
+        for implementation in [
+            *self.implementation_loaders.keys(),
+            *other.implementation_loaders.keys(),
+        ]:
+            new_loader = RuleLoader(implementation)
+            self_loader = self.implementation_loaders.get(implementation, None)
+            other_loader = other.implementation_loaders.get(implementation, None)
+            if self_loader:
+                new_loader.add_file_references(*self_loader.file_references)
+            if other_loader:
+                new_loader.add_file_references(*other_loader.file_references)
+            implementation_loaders[implementation] = new_loader
+
+        new_rules = {}
+        for implementation in [*self.rules.keys(), *other.rules.keys()]:
+            new_rules[implementation] = {
+                **self.rules.get(implementation, {}),
+                **other.rules.get(implementation, {}),
+            }
         return RuleSet(
-            rules=(self.rules | other.rules),
+            rules=new_rules,
             all_rule_names=self.all_rule_names | other.all_rule_names,
             selection=self.selection | other.selection,
+            implementation_loaders=implementation_loaders,
         )
+
+    def __radd__(self, other):
+        return self.__add__(other)
 
     def __call__(self, document: dict | Document) -> Result:
         res = Result()
@@ -288,6 +384,3 @@ class RuleSet:
             else:
                 res.not_implemented.add(rule)
         return res
-
-    def apply_weights(self, weights: dict[str, RuleForce]):
-        self.weights_override = weights

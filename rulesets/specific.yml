@@ -1,6 +1,6 @@
 ---
 rules:
-  - name: Number of packages SHOULD be greater than 1
+  - name: Number of packages is greater than 1
     failureMessage: Not enough packages.
     implementations:
       - name: spdx23
@@ -19,13 +19,13 @@ rules:
       - name: spdx23
         checker:
           func_name: image_packages_variants
-  - name: All image packages have an arch qualifier purl
-    failureMessage: Add arch=... to purls of packages.
+  - name: All non-main packages have an arch qualifier purl
+    failureMessage: Add arch qualifier to purls of packages.
     implementations:
       - name: spdx23
         checker:
           func_name: purl_arch
-  - name: The SPDXID for image packages be in the format SPDXRef-<type>-<name>-<digest>
+  - name: The SPDXID for non-main packages be in the format SPDXRef-<type>-<name>-<digest>
     failureMessage: Change SPDXID to SPDXRef-<type>-<name>-<digest> for image packages.
     implementations:
       - name: spdx23

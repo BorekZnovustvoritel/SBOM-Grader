@@ -7,20 +7,6 @@ type: object
 required:
   - rules
 properties:
-#  implementations:
-#    type: array
-#    items:
-#      type: object
-#      properties:
-#        name:
-#          type: string
-#        filePaths:
-#          type: array
-#          items:
-#            type: string
-#      additionalProperties: false
-#      required:
-#        - name
   rules:
     description: The rules
     type: array
@@ -51,30 +37,8 @@ properties:
             properties:
               name:
                 type: string
-#              skippable:
-#                type: boolean
-#                default: false
-#                description: >-
-#                  Skip the test if the field is not present at all.
-#                  Does not work for fields of objects in lists.
               fieldPath:
                 type: string
-#              check:
-#                type: string
-#                enum:
-#                  - FIELD
-#                  - VALUE
-#              selector:
-#                description: >-
-#                  If the field is somehow nested in an array, specify which
-#                  field of the array to use using a filter expression. Default
-#                  is EACH.
-#                type: string
-#                enum:
-#                  - ANY
-#                  - EACH
-#                  - LIST
-#                default: ALL
               checker:
                 type: object
                 properties:

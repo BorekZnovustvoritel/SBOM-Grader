@@ -1,16 +1,16 @@
 ---
 rules:
-  - name: Document passes schema validation.
+  - name: Document passes schema validation
     failureMessage: Document did not pass schema validation.
     implementations:
       - name: spdx23
         checker:
           func_name: validate_schema
-  - name: All named packages have a versionInfo.
+  - name: All named packages have a versionInfo
     failureMessage: Add versionInfo to all packages.
     implementations:
       - name: spdx23
-        fieldPath: packages[&]versionInfo
+        fieldPath: packages[name!=FIELD_NOT_PRESENT]versionInfo
         checker:
           neq: FIELD_NOT_PRESENT
   - name: License list has correct form
@@ -38,7 +38,6 @@ rules:
     implementations:
       - name: spdx23
         fieldPath: packages[&]checksums[&]
-        skippable: false
         checker:
           not_in:
             - FIELD_NOT_PRESENT
@@ -56,8 +55,7 @@ rules:
     failureMessage: Change files SPDXIDs to format SPDXRef-File-<filename>-<digest>.
     implementations:
       - name: spdx23
-        fieldPath: files.SPDXID
-        skippable: true
+        fieldPath: ?.files[&]SPDXID
         checker:
           str_matches_regex: 'SPDXRef-File-\w+-[a-z0-9]+'
   - name: All packages have at least one PURL

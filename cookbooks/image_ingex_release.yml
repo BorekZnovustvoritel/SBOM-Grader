@@ -1,0 +1,26 @@
+---
+MUST:
+  # general
+  - Document passes schema validation
+  # specific
+  - Main element is a package
+  - Number of packages is greater than 1
+SHOULD:
+  # general
+  - All named packages have a versionInfo
+  - License list has correct form
+  - Creation time is valid
+  - All packages are referenced in relationships
+  - All packages have a checksum
+  - All packages have a supplier
+  - All packages have at least one PURL
+  # specific
+  - All image packages are VARIANT_OF the image index
+  - All non-main packages have an arch qualifier purl
+  - All PURLs contain qualifiers repository_url and tag
+MAY:
+  - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
+  - The SPDXID for non-main packages be in the format SPDXRef-<type>-<name>-<digest>
+rulesets:
+  - general
+  - specific
