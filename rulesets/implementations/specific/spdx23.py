@@ -9,6 +9,29 @@ def _get_relationships(doc: dict) -> list:
     return relationships
 
 
+def _get_dependencies_spdxids(doc: dict) -> list[str]:
+    return [
+        r["relatedSpdxElement"]
+        for r in filter(
+            lambda x: x["relationshipType"] == "CONTAINS", _get_relationships(doc)
+        )
+    ]
+
+
+def _get_rpms_spdxids(doc: dict) -> list[str]:
+    relationships = _get_relationships(doc)
+    main_packages = _get_main_packages(doc)
+    main_spdxids = {p["SPDXID"] for p in main_packages}
+    return [
+        r["relatedSpdxElement"]
+        for r in filter(
+            lambda x: x["relationshipType"] == "GENERATED_FROM"
+            and x["relatedSpdxElement"] in main_spdxids,
+            relationships,
+        )
+    ]
+
+
 def _get_main_packages(doc: dict) -> list:
     relationships = _get_relationships(doc)
     main_element_relationship = list(
@@ -86,20 +109,60 @@ def main_element_arch_purl(doc: dict):
         ), f"Image {main_element['SPDXID']} does not have any arch qualifier."
 
 
-def non_main_packageFileName(doc: dict):
-    main_package_SPDXIDs = {p.get("SPDXID") for p in _get_main_packages(doc)}
-    for package in doc.get("packages", []):
-        if package["SPDXID"] in main_package_SPDXIDs:
-            continue
-        assert (
-            "packageFileName" in package
-        ), f"Check failed for package {package["SPDXID"]}"
+def dependencies_packageFileName(doc: dict):
+    dependencies_spdxids = list(_get_dependencies_spdxids(doc))
+    for spdxid in dependencies_spdxids:
+        packages = list(
+            filter(lambda x: x["SPDXID"] == spdxid, doc.get("packages", []))
+        )
+        assert packages, f"No package found for dependency with SPDXID {spdxid}"
+        assert len(packages) == 1, f"{spdxid} is not unique."
+        assert "packageFileName" in packages[0]
 
 
 def purl_has_repo_and_tag_qualifiers(purl: str):
     purl = PackageURL.from_string(purl)
     assert "repository_url" in purl.qualifiers
     assert "tag" in purl.qualifiers
+
+
+def purl_has_repo_id_qualifier(doc: dict):
+    rpm_spdxids = list(_get_rpms_spdxids(doc))
+    for spdxid in rpm_spdxids:
+        packages = list(
+            filter(lambda x: x["SPDXID"] == spdxid, doc.get("packages", []))
+        )
+        assert packages, f"No package found for dependency with SPDXID {spdxid}"
+        assert len(packages) == 1, f"{spdxid} is not unique."
+        package = packages[0]
+        for ext_ref in package.get("externalRefs", []):
+            if ext_ref["referenceType"] != "purl":
+                continue
+            purl = PackageURL.from_string(ext_ref["referenceLocator"])
+            assert (
+                "repository_id" in purl.qualifiers
+            ), "Add repository_id qualifier to all RPM PURLs"
+
+
+def rpms_have_md5sig(doc: dict):
+    rpm_spdxids = list(_get_rpms_spdxids(doc))
+    for spdxid in rpm_spdxids:
+        packages = list(
+            filter(lambda x: x["SPDXID"] == spdxid, doc.get("packages", []))
+        )
+        assert packages, f"No package found for dependency with SPDXID {spdxid}"
+        assert len(packages) == 1, f"{spdxid} is not unique."
+        package = packages[0]
+        assert (
+            "annotations" in package
+        ), f"Package {spdxid} does not have any annotations."
+        correct_annotations = 0
+        for annotation in package["annotations"]:
+            if annotation.get("comment", "").startswith("sigmd5: "):
+                correct_annotations += 1
+        assert (
+            correct_annotations
+        ), f"No annotations with RPM signature sigmd5 found for {spdxid}"
 
 
 def main_element_cpe22(doc: dict):

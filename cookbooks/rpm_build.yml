@@ -13,11 +13,11 @@ SHOULD:
   - All packages have at least one PURL
   # specific
   - Number of packages is greater than 1
+  - Packages are annotated with md5sig
 MAY:
   # general
   - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
   # specific
-  - Packages have a repository_id qualifier in PURLs
 rulesets:
   - general
   - specific

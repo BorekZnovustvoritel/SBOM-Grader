@@ -23,10 +23,6 @@ build-backend = "pdm.backend"
 [tool.pdm]
 distribution = true
 
-[tool.pdm.dev-dependencies]
-dev = [
-    "black>=24.10.0",
-    "tox>=4.23.2",
-    "tox-pdm>=0.7.2",
-    "pytest>=8.3.3",
-]
+
+[dependency-groups]
+dev = ["black>=24.10.0", "tox>=4.23.2", "tox-pdm>=0.7.2", "pytest>=8.3.3"]

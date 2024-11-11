@@ -8,9 +8,9 @@ SHOULD:
   - License list has correct form
   - Creation time is valid
   - All packages are referenced in relationships
-  - All packages have a checksum
+#  - All packages have a checksum
   - All packages have a supplier
-  - All packages have at least one PURL
+#  - All packages have at least one PURL
   # specific
   - Number of packages is greater than 1
   - Main element has cpe22 locator
@@ -18,3 +18,6 @@ SHOULD:
 MAY:
   # general
   - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
+rulesets:
+  - general
+  - specific

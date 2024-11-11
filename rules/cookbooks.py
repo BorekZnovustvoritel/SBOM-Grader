@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 from jsonschema.validators import validate
 
@@ -8,19 +10,58 @@ from definitions import (
     RULESET_DIR,
     ROOT_DIR,
 )
-from rules.rule import RuleSet, Document
+from rules.rule import RuleSet, Document, Result
+
+
+@dataclass
+class CookbookResult:
+    result: Result
+    cookbook: "Cookbook"
+
+    @property
+    def must(self):
+        return [self.result.get(name) for name in self.cookbook.must]
+
+    @property
+    def should(self):
+        return [self.result.get(name) for name in self.cookbook.should]
+
+    @property
+    def may(self):
+        return [self.result.get(name) for name in self.cookbook.may]
+
+    def get(self, rule_name: str):
+        return self.result.get(rule_name)
+
+    def get_unsuccessful(self) -> "CookbookResult":
+
+        failed = self.result.failed
+        error = self.result.errors
+        unsuccessful = set(failed.keys())
+        unsuccessful.update(error.keys())
+        new_must = set(filter(lambda x: x in unsuccessful, self.cookbook.must))
+        new_should = set(filter(lambda x: x in unsuccessful, self.cookbook.should))
+        new_may = set(filter(lambda x: x in unsuccessful, self.cookbook.may))
+        return CookbookResult(
+            Result(unsuccessful, failed, error),
+            Cookbook(self.cookbook.rulesets, new_must, new_should, new_may),
+        )
 
 
 class Cookbook:
     def __init__(
-        self, rulesets: list[str], must: list[str], should: list[str], may: list[str]
+        self,
+        rulesets: Iterable[str],
+        must: Iterable[str],
+        should: Iterable[str],
+        may: Iterable[str],
     ):
         self.rulesets = rulesets
         self._initialized_ruleset: RuleSet | None = None
         self.__is_initialized: bool = False
-        self.must = must
-        self.should = should
-        self.may = may
+        self.must = set(must)
+        self.should = set(should)
+        self.may = set(may)
 
     def initialize(self):
         self._initialized_ruleset = RuleSet()
@@ -55,15 +96,9 @@ class Cookbook:
             schema_dict.get("MAY", []),
         )
 
-    def __call__(self, document: dict | Document):
+    def __call__(self, document: dict | Document) -> CookbookResult:
         if not self.__is_initialized:
             self.initialize()
         res = self._initialized_ruleset(document)
-        result_dict = {}
-        for type_, rules in [
-            ("MUST", self.must),
-            ("SHOULD", self.should),
-            ("MAY", self.may),
-        ]:
-            result_dict[type_] = [res.get(rule) for rule in rules]
-        return result_dict
+        cook_res = CookbookResult(res, self)
+        return cook_res

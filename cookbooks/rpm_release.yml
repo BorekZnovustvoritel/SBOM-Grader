@@ -14,6 +14,7 @@ SHOULD:
   # specific
   - Number of packages is greater than 1
   - Packages have a repository_id qualifier in PURLs
+  - Packages are annotated with md5sig
 MAY:
   # general
   - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>

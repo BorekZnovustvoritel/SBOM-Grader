@@ -42,7 +42,7 @@ rules:
     implementations:
       - name: spdx23
         checker:
-          func_name: non_main_packageFileName
+          func_name: dependencies_packageFileName
   - name: All PURLs contain qualifiers repository_url and tag
     failureMessage: Add qualifiers repository_url and tag to every PURL.
     implementations:
@@ -55,9 +55,16 @@ rules:
     failureMessage: Add repository_id qualifier to all package purls.
     implementations:
       - name: spdx23
-        fieldPath: packages[&]externalRefs[referenceType=purl]referenceLocator
         checker:
-          str_contains: repository_id
+          func_name: purl_has_repo_id_qualifier
+
+  - name: Packages are annotated with md5sig
+    failureMessage: 'Add annotation of type "OTHER" with comment "md5sig: <value>" to all RPMs'
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: rpms_have_md5sig
+
 
   - name: Main element has cpe22 locator
     failureMessage: Add cpe22Type locator to element described by SPDXRef-DOCUMENT

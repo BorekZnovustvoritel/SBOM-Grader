@@ -113,7 +113,7 @@ class Result:
             return ResultDetail(
                 rule_name=rule_name,
                 result_type=ResultType.ERROR,
-                result_detail=self.failed[rule_name],
+                result_detail=self.errors[rule_name],
             )
         if rule_name in self.skipped:
             return ResultDetail(
@@ -257,7 +257,7 @@ class Rule:
                     self.error_message + " Field not present: " + e.args[1]
                 )
         except Exception as e:
-            result.errors[self.name] = str(e)
+            result.errors[self.name] = str(type(e)) + " " + str(e)
         return result
 
 
