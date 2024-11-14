@@ -1,33 +1,21 @@
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Sized, Union
 
 from jsonschema.validators import validate
 
-from .rule_loader import RuleLoader
-from definitions import (
+from core.documents import Document
+from core.enums import ResultType
+from core.rule_loader import RuleLoader
+from core.definitions import (
     RULESET_VALIDATION_SCHEMA_PATH,
-    get_mapping,
-    get_path_to_implementations,
-    Implementation,
-    SBOM_FORMAT_DEFINITION_MAPPING,
-    RuleForce,
+    FIELD_NOT_PRESENT,
 )
+from core.utils import get_mapping, get_path_to_implementations
 
-
-class __FieldNotPresent:
-    def __repr__(self):
-        return "Field not present."
-
-    def get(self, *_):
-        return self
-
-
-FIELD_NOT_PRESENT = __FieldNotPresent()
 
 operation_map = {
     "eq": lambda expected, actual: expected == actual,
@@ -52,31 +40,6 @@ operation_map = {
 }
 
 
-class Document:
-    def __init__(self, document_dict: dict[str, Any]):
-        self._doc = document_dict
-
-    @property
-    def implementation(self) -> Implementation:
-        for item in Implementation:
-            field_to_check = SBOM_FORMAT_DEFINITION_MAPPING[item]
-
-            if self._doc.get(next(iter(field_to_check.keys()))) == next(
-                iter(field_to_check.values())
-            ):
-                return item
-        raise ValueError("Document is in an unknown standard.")
-
-
-class ResultType(Enum):
-    SUCCESS = "success"
-    NOT_PRESENT = "not present"
-    FAILED = "failed"
-    ERROR = "error"
-    SKIPPED = "skipped"
-    NOT_IMPLEMENTED = "not implemented"
-
-
 @dataclass
 class ResultDetail:
     rule_name: str
@@ -92,7 +55,7 @@ class Result:
     skipped: set[str] = field(default_factory=set)
     not_implemented: set[str] = field(default_factory=set)
 
-    def __add__(self, other: "Result"):
+    def __add__(self, other: "Result") -> "Result":
         if not isinstance(other, Result):
             raise TypeError(f"Cannot add Result and {type(other)}")
         return Result(
@@ -100,6 +63,7 @@ class Result:
             ran=self.ran | other.ran,
             errors=self.errors | other.errors,
             skipped=self.skipped | other.skipped,
+            not_implemented=self.not_implemented | other.not_implemented,
         )
 
     def get(self, rule_name: str) -> ResultDetail:
@@ -150,7 +114,6 @@ class Rule:
     func: Callable
     error_message: str
     field_path: str
-    skippable: bool
 
     def __call__(self, doc: list[dict] | dict | Document) -> Result:
         if isinstance(doc, dict):
@@ -230,17 +193,22 @@ class Rule:
                     )
             else:
                 # The path has ended
-                resp = self.func(doc_)
-                assert (
-                    resp is True or resp is None
-                ), f"Check did not pass for item: {doc_} at path: {path_tried}"
+                try:
+                    resp = self.func(doc_)
+                    assert resp is True or resp is None
+                except Exception as e:
+                    message_to_return = (
+                        f"Check did not pass for item: {doc_} at path: {path_tried}"
+                        + "\n".join(str(m) for m in e.args)
+                    )
+                    raise type(e)(message_to_return)
 
         result = Result(ran={self.name})
         field_path = self.field_path or ""
         path_list = re.split(r"[\[\.\]]", field_path)
         path_list = [item for item in path_list if item]
         try:
-            run_on_path(doc._doc, path_list, "")
+            run_on_path(doc.doc, path_list, "")
 
         except AssertionError as e:
             message_to_return = self.error_message
@@ -250,12 +218,9 @@ class Rule:
                 )
             result.failed[self.name] = message_to_return
         except FieldNotPresentError as e:
-            if self.skippable:
-                result.skipped.add(self.name)
-            else:
-                result.failed[self.name] = (
-                    self.error_message + " Field not present: " + e.args[1]
-                )
+            result.failed[self.name] = (
+                self.error_message + " Field not present: " + e.args[1]
+            )
         except Exception as e:
             result.errors[self.name] = str(type(e)) + " " + str(e)
         return result
@@ -263,14 +228,14 @@ class Rule:
 
 class RuleSet:
     @staticmethod
-    def from_schema(schema: str | Path):
-        schema_dict = get_mapping(schema)
+    def from_file(file: str | Path):
+        schema_dict = get_mapping(file)
 
         validate(schema_dict, get_mapping(RULESET_VALIDATION_SCHEMA_PATH))
 
         implementation_loaders: dict[str, RuleLoader] = {}
 
-        for implementation_file in get_path_to_implementations(schema).iterdir():
+        for implementation_file in get_path_to_implementations(file).iterdir():
             implementation_name = implementation_file.name.rsplit(".", 1)[0]
             implementation_loaders[implementation_name] = RuleLoader(
                 implementation_name, implementation_file
@@ -312,7 +277,6 @@ class RuleSet:
                     func=func,
                     error_message=failure_message,
                     field_path=field_path,
-                    skippable=spec.get("skippable", False),
                 )
         all_rule_names = {rule["name"] for rule in schema_dict["rules"]}
         return RuleSet(
@@ -331,7 +295,7 @@ class RuleSet:
         self.implementation_loaders = implementation_loaders or {}
         self.rules = rules or {}
         self.all_rule_names = all_rule_names or set()
-        self.selection = selection or self.all_rule_names
+        self.selection = selection if selection is not None else self.all_rule_names
 
     def __add__(self, other: "RuleSet"):
         if not isinstance(other, RuleSet):
@@ -362,9 +326,6 @@ class RuleSet:
             selection=self.selection | other.selection,
             implementation_loaders=implementation_loaders,
         )
-
-    def __radd__(self, other):
-        return self.__add__(other)
 
     def __call__(self, document: dict | Document) -> Result:
         res = Result()

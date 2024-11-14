@@ -1,7 +1,7 @@
 import pytest
 
-from rules.cookbooks import Cookbook
-from rules.rule import Document
+from core.cookbooks import Cookbook
+from core.documents import Document
 
 
 @pytest.mark.parametrize(

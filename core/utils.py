@@ -1,26 +1,9 @@
 import json
-from enum import Enum
 from pathlib import Path
 
 import yaml
 
-ROOT_DIR: Path = Path(__file__).parent
-# RULES_DIR_NAME = "rules"
-RULESET_DIR = ROOT_DIR / "rulesets"
-COOKBOOKS_DIR = ROOT_DIR / "cookbooks"
-IMPLEMENTATION_DIR_NAME = "specification_rules"
-# IMPLEMENTATION_DIR = ROOT_DIR / RULES_DIR_NAME / IMPLEMENTATION_DIR_NAME
-RULESET_VALIDATION_SCHEMA_PATH = ROOT_DIR / "rulesets" / "schema" / "rule_schema.yml"
-COOKBOOK_VALIDATION_SCHEMA_PATH = (
-    ROOT_DIR / "cookbooks" / "schema" / "cookbook_schema.yml"
-)
-
-
-class Implementation(Enum):
-    SPDX23 = "spdx23"
-
-
-SBOM_FORMAT_DEFINITION_MAPPING = {Implementation.SPDX23: {"spdxVersion": "SPDX-2.3"}}
+from core.enums import Grade
 
 
 def get_mapping(schema: str | Path) -> dict | None:
@@ -43,7 +26,6 @@ def get_path_to_implementations(schema_path: str | Path):
     return schema_path.parent / "implementations" / schema_path.name.rsplit(".", 1)[0]
 
 
-class RuleForce(Enum):
-    MAY = "MAY"
-    SHOULD = "SHOULD"
-    MUST = "MUST"
+def validation_passed(validation_grade: Grade, minimal_grade: Grade) -> bool:
+    # minimal is less than or equal to validation
+    return Grade.compare(validation_grade, minimal_grade) < 1
