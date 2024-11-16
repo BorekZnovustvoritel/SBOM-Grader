@@ -9,10 +9,12 @@ from jsonschema.validators import validate
 
 from core.documents import Document
 from core.enums import ResultType
+from core.field_resolve import FieldResolver
 from core.rule_loader import RuleLoader
 from core.definitions import (
     RULESET_VALIDATION_SCHEMA_PATH,
     FIELD_NOT_PRESENT,
+    FieldNotPresentError,
 )
 from core.utils import get_mapping, get_path_to_implementations
 
@@ -104,111 +106,25 @@ class Result:
         )
 
 
-class FieldNotPresentError(ValueError):
-    pass
-
-
 @dataclass
 class Rule:
     name: str
     func: Callable
     error_message: str
     field_path: str
+    field_resolver: FieldResolver
 
     def __call__(self, doc: list[dict] | dict | Document) -> Result:
         if isinstance(doc, dict):
             doc = Document(doc)
 
-        def run_on_path(
-            doc_: Union[dict, list[Any], FIELD_NOT_PRESENT],
-            path: list[str],
-            path_tried: str,
-        ):
-            if doc_ is FIELD_NOT_PRESENT:
-                raise FieldNotPresentError("Field not present: ", path_tried)
-            if path:
-                step = path[0]
-                if step == "|":
-                    # Any
-                    assert isinstance(doc_, list), "Incorrect path to field."
-                    failed = 0
-                    assertions = []
-                    for idx, item in enumerate(doc_):
-                        try:
-                            run_on_path(item, path[1:], path_tried + f"[{idx}]")
-                        except (AssertionError, FieldNotPresentError) as e:
-                            failed += 1
-                            assertions.append(e)
-                    assert failed < len(
-                        doc_
-                    ), f"Check did not pass for any fields. Assertions: {assertions}, path: {path_tried}"
-
-                elif step == "&":
-                    # Each
-                    assert isinstance(doc_, list), "Incorrect path to field."
-                    for idx, item in enumerate(doc_):
-                        run_on_path(item, path[1:], path_tried + f"[{idx}]")
-
-                elif step == "?":
-                    # Skippable if not present
-                    assert isinstance(
-                        doc_, dict
-                    ), "Skippable fields only apply on dictionaries"
-                    if path[1:] and path[1] in doc_:
-                        run_on_path(doc_.get(path[1]), path[2:], path_tried)
-
-                elif "!=" in step:
-                    # Filter which fields to use
-                    assert isinstance(doc_, list), "Incorrect path to field."
-                    attr, check = step.split("!=")
-                    for idx, item in enumerate(doc_):
-                        if check == "FIELD_NOT_PRESENT":
-                            check = FIELD_NOT_PRESENT
-                        if item.get(attr, FIELD_NOT_PRESENT) == check:
-                            continue
-                        run_on_path(item, path[1:], path_tried + f"[{idx}]")
-
-                elif "=" in step:
-                    # Filter which fields to use
-                    assert isinstance(doc_, list), "Incorrect path to field."
-                    attr, check = step.split("=")
-                    for idx, item in enumerate(doc_):
-                        if check == "FIELD_NOT_PRESENT":
-                            check = FIELD_NOT_PRESENT
-                        if item.get(attr, FIELD_NOT_PRESENT) != check:
-                            continue
-                        run_on_path(item, path[1:], path_tried + f"[{idx}]")
-
-                elif step.isdigit():
-                    # Element on an index
-                    assert isinstance(doc_, list), "Incorrect path to field."
-                    run_on_path(doc_[int(step)], path[1:], path_tried + f"[{step}]")
-
-                else:
-                    # Name of the field
-                    run_on_path(
-                        doc_.get(step, FIELD_NOT_PRESENT),
-                        path[1:],
-                        path_tried + f".{step}",
-                    )
-            else:
-                # The path has ended
-                try:
-                    resp = self.func(doc_)
-                    assert resp is True or resp is None
-                except Exception as e:
-                    message_to_return = (
-                        f"Check did not pass for item: {doc_} at path: {path_tried}"
-                        + "\n".join(str(m) for m in e.args)
-                    )
-                    raise type(e)(message_to_return)
-
         result = Result(ran={self.name})
         field_path = self.field_path or ""
-        path_list = re.split(r"[\[\.\]]", field_path)
-        path_list = [item for item in path_list if item]
+        # path_list = re.split(r"[\[\.\]]", field_path)
+        # path_list = [item for item in path_list if item]
         try:
-            run_on_path(doc.doc, path_list, "")
+            self.field_resolver.run_func(doc.doc, self.func, field_path)
+            # run_on_path(doc.doc, path_list, "")
 
         except AssertionError as e:
             message_to_return = self.error_message
@@ -221,8 +137,8 @@ class Rule:
             result.failed[self.name] = (
                 self.error_message + " Field not present: " + e.args[1]
             )
-        except Exception as e:
-            result.errors[self.name] = str(type(e)) + " " + str(e)
+        # except Exception as e:
+        #     result.errors[self.name] = str(type(e)) + " " + str(e)
         return result
 
 
@@ -272,11 +188,18 @@ class RuleSet:
                     )
                 else:
                     func = partial(func, check_against)
+
+                var_dict = {}
+                spec_variables = spec.get("variables", [])
+                for var_obj in spec_variables:
+                    var_dict[var_obj["name"]] = var_obj["fieldPath"]
+
                 all_rules[implementation_name][name] = Rule(
                     name=name,
                     func=func,
                     error_message=failure_message,
                     field_path=field_path,
+                    field_resolver=FieldResolver(var_dict),
                 )
         all_rule_names = {rule["name"] for rule in schema_dict["rules"]}
         return RuleSet(

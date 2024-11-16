@@ -23,3 +23,7 @@ class __FieldNotPresent:
 
 
 FIELD_NOT_PRESENT = __FieldNotPresent()
+
+
+class FieldNotPresentError(ValueError):
+    pass
