@@ -12,12 +12,13 @@ SHOULD:
   - All packages have a supplier
   - All packages have at least one PURL
   # specific
+  - Main element is a package
   - Number of packages is greater than 1
   - Packages are annotated with md5sig
 MAY:
   # general
   - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
-  # specific
+#  # specific
 rulesets:
   - general
   - specific

@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 from typing import Union, Any, Callable
 
 from core.definitions import FIELD_NOT_PRESENT, FieldNotPresentError
@@ -21,7 +22,7 @@ class FieldResolver:
             assert (
                 variable_name not in dependencies[variable_name]
             ), f"Self referencing variable {variable_name} found."
-        resolved_variables = {}
+        resolved_variables = defaultdict(set)
         while not all(var_name in resolved_variables for var_name in dependencies):
             # Get a var with no dependencies
             var_name, var_deps = sorted(dependencies.items(), key=lambda x: len(x[1]))[
@@ -31,20 +32,24 @@ class FieldResolver:
                 not var_deps
             ), f"Circular variable reference found for variable {var_name}"
 
+            def add_to_variable(value: Any) -> None:
+                resolved_variables[var_name].add(value)
+
             self._run_on_path(
                 doc,
                 re.split(r"[\[\.\]]", self._uninitialized_vars[var_name]),
                 resolved_variables,
                 "",
-                lambda x: resolved_variables.update({var_name: x}),
+                add_to_variable,
                 True,
+                set(),
             )
 
             dependencies.pop(var_name)
             for dep in dependencies.values():
                 if var_name in dep:
                     dep.remove(var_name)
-        return resolved_variables
+        return dict(resolved_variables)
 
     def _run_on_path(
         self,
@@ -54,39 +59,58 @@ class FieldResolver:
         path_tried: str,
         func_to_run: Callable[[Any], Any],
         accept_not_present_field: bool,
+        ran_on: set[str],
     ):
         if not accept_not_present_field and doc_ is FIELD_NOT_PRESENT:
             raise FieldNotPresentError("Field not present: ", path_tried)
         if path:
             step = path[0]
-            if match := re.match(
-                r"^(?P<field>\w+)(?P<operation>[=!~]+)\${(?P<varname>\w+)}$", step
-            ):
-                # Variable query
+            if "=" in step:
+                # Query
                 assert isinstance(
                     doc_, list
                 ), f"Incorrect path to field: {path_tried}[{step}]"
-                field_ = match.group("field")
-                operation = match.group("operation")
-                varname = match.group("varname")
-                assert varname in variables, f"Unknown query variable: {varname}."
+                sub_queries = step.split(",")
+                fields_to_skip = set()
+                for sub_query in sub_queries:
+                    if match := re.match(
+                        r"^(?P<field>\w+)(?P<operation>[=!]+)\${(?P<varname>\w+)}$",
+                        sub_query,
+                    ):
+                        field_ = match.group("field")
+                        operation = match.group("operation")
+                        varname = match.group("varname")
+                        assert (
+                            varname in variables
+                        ), f"Unknown query variable: {varname}."
+                        val_to_check = variables[varname]
+                        is_variable = True
+                    else:
+                        match = re.match(
+                            r"^(?P<field>\w+)(?P<operation>[=!]+)(?P<val>[\w\-\.]+)$",
+                            sub_query,
+                        )
+                        field_ = match.group("field")
+                        operation = match.group("operation")
+                        val_to_check = match.group("val")
+                        is_variable = False
+                    for idx, item in enumerate(doc_):
+                        field_val = item.get(field_, FIELD_NOT_PRESENT)
+
+                        if operation == "!=" and (
+                            # Vals from variables are always a set
+                            (not is_variable and field_val == val_to_check)
+                            or (is_variable and field_val in val_to_check)
+                        ):
+                            fields_to_skip.add(idx)
+                        elif operation == "=" and (
+                            # Vals from variables are always a set
+                            (not is_variable and field_val != val_to_check)
+                            or (is_variable and field_val not in val_to_check)
+                        ):
+                            fields_to_skip.add(idx)
                 for idx, item in enumerate(doc_):
-                    field_val = item.get(field_, FIELD_NOT_PRESENT)
-                    if operation == "!=" and field_val == variables[varname]:
-                        continue
-                    elif operation == "=" and field_val != variables[varname]:
-                        continue
-                    elif (
-                        "~" in operation
-                        and "!" not in operation
-                        and field_val not in variables[varname]
-                    ):
-                        continue
-                    elif (
-                        "~" in operation
-                        and "!" in operation
-                        and field_val in variables[varname]
-                    ):
+                    if idx in fields_to_skip:
                         continue
                     self._run_on_path(
                         item,
@@ -95,6 +119,7 @@ class FieldResolver:
                         path_tried + f"[{idx}]",
                         func_to_run,
                         accept_not_present_field,
+                        ran_on,
                     )
 
             elif step == "|":
@@ -113,6 +138,7 @@ class FieldResolver:
                             path_tried + f"[{idx}]",
                             func_to_run,
                             accept_not_present_field,
+                            ran_on,
                         )
                     except (AssertionError, FieldNotPresentError) as e:
                         failed += 1
@@ -134,6 +160,7 @@ class FieldResolver:
                         path_tried + f"[{idx}]",
                         func_to_run,
                         accept_not_present_field,
+                        ran_on,
                     )
 
             elif step == "?":
@@ -149,42 +176,7 @@ class FieldResolver:
                         path_tried,
                         func_to_run,
                         accept_not_present_field,
-                    )
-
-            elif "!=" in step:
-                # Filter which fields to use
-                assert isinstance(doc_, list), "Incorrect path to field."
-                attr, check = step.split("!=")
-                for idx, item in enumerate(doc_):
-                    if check == "FIELD_NOT_PRESENT":
-                        check = FIELD_NOT_PRESENT
-                    if item.get(attr, FIELD_NOT_PRESENT) == check:
-                        continue
-                    self._run_on_path(
-                        item,
-                        path[1:],
-                        variables,
-                        path_tried + f"[{idx}]",
-                        func_to_run,
-                        accept_not_present_field,
-                    )
-
-            elif "=" in step:
-                # Filter which fields to use
-                assert isinstance(doc_, list), "Incorrect path to field."
-                attr, check = step.split("=")
-                for idx, item in enumerate(doc_):
-                    if check == "FIELD_NOT_PRESENT":
-                        check = FIELD_NOT_PRESENT
-                    if item.get(attr, FIELD_NOT_PRESENT) != check:
-                        continue
-                    self._run_on_path(
-                        item,
-                        path[1:],
-                        variables,
-                        path_tried + f"[{idx}]",
-                        func_to_run,
-                        accept_not_present_field,
+                        ran_on,
                     )
 
             elif step.isdigit():
@@ -199,6 +191,7 @@ class FieldResolver:
                     path_tried + f"[{step}]",
                     func_to_run,
                     accept_not_present_field,
+                    ran_on,
                 )
 
             else:
@@ -210,11 +203,13 @@ class FieldResolver:
                     path_tried + f".{step}",
                     func_to_run,
                     accept_not_present_field,
+                    ran_on,
                 )
         else:
             # The path has ended
             try:
                 resp = func_to_run(doc_)
+                ran_on.add(path_tried)
                 assert resp is True or resp is None
             except Exception as e:
                 message_to_return = (
@@ -224,10 +219,18 @@ class FieldResolver:
                 raise type(e)(message_to_return)
 
     def run_func(
-        self, doc: dict[str, Any], func: Callable[[Any], Any], field_path: str
+        self,
+        doc: dict[str, Any],
+        func: Callable[[Any], Any],
+        field_path: str,
+        minimal_runs: int = 1,
     ) -> Any:
         path_list = re.split(r"[\[\.\]]", field_path)
         path_list = [item for item in path_list if item]
         variables = self.resolve_variables(doc)
 
-        self._run_on_path(doc, path_list, variables, "", func, False)
+        ran_on = set()
+        self._run_on_path(doc, path_list, variables, "", func, False, ran_on)
+        assert (
+            len(ran_on) >= minimal_runs
+        ), "Test was not performed on any fields because no fields match given filters."

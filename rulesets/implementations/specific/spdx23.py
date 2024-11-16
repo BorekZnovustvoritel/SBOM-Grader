@@ -53,13 +53,6 @@ def _get_main_packages(doc: dict) -> list:
     return main_packages
 
 
-def main_element_is_package(doc: dict):
-    for item in _get_main_packages(doc):
-        assert (
-            item
-        ), f"The item referenced to be described by SPDXRef-DOCUMENT is not a package. (SPDXID: {item["SPDXID"]})"
-
-
 def image_packages_variants(doc: dict):
     main_package_SPDXIDs = {p.get("SPDXID") for p in _get_main_packages(doc)}
     for package in doc.get("packages", []):
@@ -124,24 +117,6 @@ def purl_has_repo_and_tag_qualifiers(purl: str):
     purl = PackageURL.from_string(purl)
     assert "repository_url" in purl.qualifiers
     assert "tag" in purl.qualifiers
-
-
-def purl_has_repo_id_qualifier(doc: dict):
-    rpm_spdxids = list(_get_rpms_spdxids(doc))
-    for spdxid in rpm_spdxids:
-        packages = list(
-            filter(lambda x: x["SPDXID"] == spdxid, doc.get("packages", []))
-        )
-        assert packages, f"No package found for dependency with SPDXID {spdxid}"
-        assert len(packages) == 1, f"{spdxid} is not unique."
-        package = packages[0]
-        for ext_ref in package.get("externalRefs", []):
-            if ext_ref["referenceType"] != "purl":
-                continue
-            purl = PackageURL.from_string(ext_ref["referenceLocator"])
-            assert (
-                "repository_id" in purl.qualifiers
-            ), "Add repository_id qualifier to all RPM PURLs"
 
 
 def rpms_have_md5sig(doc: dict):

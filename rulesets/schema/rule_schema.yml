@@ -42,6 +42,9 @@ properties:
                   additionalProperties: false
               fieldPath:
                 type: string
+              minimum_tested_elements:
+                type: integer
+                default: 1
               checker:
                 type: object
                 properties:

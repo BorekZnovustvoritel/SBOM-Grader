@@ -11,8 +11,12 @@ rules:
     failureMessage: SPDXRef-DOCUMENT has to reference an object of type package.
     implementations:
       - name: spdx23
+        variables:
+          - name: main_spdxids
+            fieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]relatedSpdxElement
+        fieldPath: packages[SPDXID=${main_spdxids}]
         checker:
-          func_name: main_element_is_package
+          neq: FIELD_NOT_FOUND
   - name: All image packages are VARIANT_OF the image index
     failureMessage: All image packages have to be VARIANT_OF the image index.
     implementations:
@@ -55,8 +59,14 @@ rules:
     failureMessage: Add repository_id qualifier to all package purls.
     implementations:
       - name: spdx23
+        variables:
+          - name: generated_spdxids
+            fieldPath: relationships[relationshipType=GENERATED_FROM]spdxElementId
+          - name: contained_spdxids # in RPM, contained elements are source archives
+            fieldPath: relationships[relationshipType=CONTAINS]relatedSpdxElement
+        fieldPath: packages[SPDXID=${generated_spdxids},SPDXID!=${contained_spdxids}]externalRefs[referenceType=purl]referenceLocator
         checker:
-          func_name: purl_has_repo_id_qualifier
+          str_contains: repository_id
 
   - name: Packages are annotated with md5sig
     failureMessage: 'Add annotation of type "OTHER" with comment "md5sig: <value>" to all RPMs'

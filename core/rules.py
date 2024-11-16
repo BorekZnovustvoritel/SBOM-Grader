@@ -29,7 +29,7 @@ operation_map = {
     "str_endswith": lambda expected, actual: isinstance(actual, str)
     and actual.endswith(expected),
     "str_contains": lambda expected, actual: isinstance(actual, str)
-    and actual in expected,
+    and expected in actual,
     "str_matches_regex": lambda expected, actual: isinstance(actual, str)
     and bool(re.match(expected, actual)),
     "length_eq": lambda expected, actual: isinstance(actual, Sized)
@@ -112,6 +112,7 @@ class Rule:
     func: Callable
     error_message: str
     field_path: str
+    minimum_tested_elements: int
     field_resolver: FieldResolver
 
     def __call__(self, doc: list[dict] | dict | Document) -> Result:
@@ -120,11 +121,10 @@ class Rule:
 
         result = Result(ran={self.name})
         field_path = self.field_path or ""
-        # path_list = re.split(r"[\[\.\]]", field_path)
-        # path_list = [item for item in path_list if item]
         try:
-            self.field_resolver.run_func(doc.doc, self.func, field_path)
-            # run_on_path(doc.doc, path_list, "")
+            self.field_resolver.run_func(
+                doc.doc, self.func, field_path, self.minimum_tested_elements
+            )
 
         except AssertionError as e:
             message_to_return = self.error_message
@@ -194,12 +194,15 @@ class RuleSet:
                 for var_obj in spec_variables:
                     var_dict[var_obj["name"]] = var_obj["fieldPath"]
 
+                minimum_tested_elements = spec.get("minimum_tested_elements", 1)
+
                 all_rules[implementation_name][name] = Rule(
                     name=name,
                     func=func,
                     error_message=failure_message,
                     field_path=field_path,
                     field_resolver=FieldResolver(var_dict),
+                    minimum_tested_elements=minimum_tested_elements,
                 )
         all_rule_names = {rule["name"] for rule in schema_dict["rules"]}
         return RuleSet(
