@@ -10,6 +10,13 @@ class FieldResolver:
     def __init__(self, variables: dict[str, str]):
         self._uninitialized_vars = variables
 
+    def has_var(self, var_name: str) -> bool:
+        return var_name in self._uninitialized_vars
+
+    @property
+    def var_definitions(self) -> dict[str, str]:
+        return self._uninitialized_vars
+
     def resolve_variables(self, doc: dict[str, Any]) -> dict[str, Any]:
         # first resolve dependency tree for variables
         dependencies = {}
@@ -224,10 +231,12 @@ class FieldResolver:
         func: Callable[[Any], Any],
         field_path: str,
         minimal_runs: int = 1,
+        fallback_variables: dict[str, Any] | None = None,
     ) -> Any:
         path_list = re.split(r"[\[\.\]]", field_path)
         path_list = [item for item in path_list if item]
-        variables = self.resolve_variables(doc)
+        variables = {} if not fallback_variables else {**fallback_variables}
+        variables.update(self.resolve_variables(doc))
 
         ran_on = set()
         self._run_on_path(doc, path_list, variables, "", func, False, ran_on)

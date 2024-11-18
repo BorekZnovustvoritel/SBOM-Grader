@@ -19,7 +19,7 @@ SHOULD:
   - Non-main packages have packageFileName
 MAY:
   # general
-  - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
+  - All files SPDXIDs have format SPDXRef-File-filename-digest
 rulesets:
   - general
   - specific

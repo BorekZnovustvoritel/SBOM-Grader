@@ -15,9 +15,11 @@ def get_mapping(schema: str | Path) -> dict | None:
         with open(schema) as stream:
             if schema.name.endswith(".json"):
                 doc = json.load(stream)
-            elif schema.name.endswith("yml") or schema.name.endswith("yaml"):
+            elif schema.name.endswith(".yml") or schema.name.endswith(".yaml"):
                 doc = yaml.safe_load(stream)
-        return doc
+            else:
+                doc = {}
+            return doc
 
 
 def get_path_to_implementations(schema_path: str | Path):

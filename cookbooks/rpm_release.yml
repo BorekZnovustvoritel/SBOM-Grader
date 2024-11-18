@@ -15,10 +15,10 @@ SHOULD:
   - Main element is a package
   - Number of packages is greater than 1
   - Packages have a repository_id qualifier in PURLs
-  - Packages are annotated with md5sig
+  - RPM dependency packages are annotated with sigmd5
 MAY:
   # general
-  - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
+  - All files SPDXIDs have format SPDXRef-File-filename-digest
   # specific
 rulesets:
   - general

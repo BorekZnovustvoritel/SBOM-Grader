@@ -115,15 +115,24 @@ class Rule:
     minimum_tested_elements: int
     field_resolver: FieldResolver
 
-    def __call__(self, doc: list[dict] | dict | Document) -> Result:
+    def __call__(
+        self,
+        doc: list[dict] | dict | Document,
+        fallback_vars: dict[str, Any] | None = None,
+    ) -> Result:
         if isinstance(doc, dict):
             doc = Document(doc)
 
         result = Result(ran={self.name})
         field_path = self.field_path or ""
+        fallback_vars = {} if not fallback_vars else fallback_vars
         try:
             self.field_resolver.run_func(
-                doc.doc, self.func, field_path, self.minimum_tested_elements
+                doc.doc,
+                self.func,
+                field_path,
+                self.minimum_tested_elements,
+                fallback_variables=fallback_vars,
             )
 
         except AssertionError as e:
@@ -137,8 +146,8 @@ class Rule:
             result.failed[self.name] = (
                 self.error_message + " Field not present: " + e.args[1]
             )
-        # except Exception as e:
-        #     result.errors[self.name] = str(type(e)) + " " + str(e)
+        except Exception as e:
+            result.errors[self.name] = str(type(e)) + " " + str(e)
         return result
 
 
@@ -156,6 +165,18 @@ class RuleSet:
             implementation_loaders[implementation_name] = RuleLoader(
                 implementation_name, implementation_file
             )
+
+        global_variable_definitions = {}
+        for implementation_obj in schema_dict.get("variables", {}).get(
+            "implementations", []
+        ):
+
+            implementation = implementation_obj["name"]
+            global_variable_definitions[implementation] = {}
+            for var_obj in implementation_obj["variables"]:
+                global_variable_definitions[implementation][var_obj["name"]] = var_obj[
+                    "fieldPath"
+                ]
 
         all_rules = defaultdict(dict)
         for rule in schema_dict["rules"]:
@@ -209,6 +230,7 @@ class RuleSet:
             implementation_loaders=implementation_loaders,
             rules=all_rules,
             all_rule_names=all_rule_names,
+            variables=global_variable_definitions,
         )
 
     def __init__(
@@ -217,11 +239,17 @@ class RuleSet:
         implementation_loaders: dict[str, RuleLoader] | None = None,
         all_rule_names: set[str] | None = None,
         selection: set[str] | None = None,
+        variables: dict[str, dict[str, str]] | None = None,
     ):
         self.implementation_loaders = implementation_loaders or {}
         self.rules = rules or {}
         self.all_rule_names = all_rule_names or set()
         self.selection = selection if selection is not None else self.all_rule_names
+        self.field_resolvers = {}
+        if not variables:
+            variables = {}
+        for implementation, var_dict in variables.items():
+            self.field_resolvers[implementation] = FieldResolver(var_dict)
 
     def __add__(self, other: "RuleSet"):
         if not isinstance(other, RuleSet):
@@ -246,11 +274,25 @@ class RuleSet:
                 **self.rules.get(implementation, {}),
                 **other.rules.get(implementation, {}),
             }
+        variable_definitions = {}
+        for implementation in [*self.field_resolvers.keys(), *other.rules.keys()]:
+            variable_definitions[implementation] = {}
+            self_resolver = self.field_resolvers.get(implementation)
+            if self_resolver:
+                variable_definitions[implementation].update(
+                    self_resolver.var_definitions
+                )
+            other_resolver = other.field_resolvers.get(implementation)
+            if other_resolver:
+                variable_definitions[implementation].update(
+                    other_resolver.var_definitions
+                )
         return RuleSet(
             rules=new_rules,
             all_rule_names=self.all_rule_names | other.all_rule_names,
             selection=self.selection | other.selection,
             implementation_loaders=implementation_loaders,
+            variables=variable_definitions,
         )
 
     def __call__(self, document: dict | Document) -> Result:
@@ -258,6 +300,11 @@ class RuleSet:
         if isinstance(document, dict):
             document = Document(document)
         implementation = document.implementation.value
+        global_variables_resolver = self.field_resolvers.get(implementation)
+        global_variables = {}
+        if global_variables_resolver:
+            global_variables = global_variables_resolver.resolve_variables(document.doc)
+
         for rule in self.all_rule_names:
             if rule not in self.selection:
                 res.skipped.add(rule)
@@ -267,7 +314,7 @@ class RuleSet:
                 if not callable(rule_obj.func):
                     res.not_implemented.add(rule)
                 else:
-                    res += rule_obj(document)
+                    res += rule_obj(document, fallback_vars=global_variables)
             else:
                 res.not_implemented.add(rule)
         return res

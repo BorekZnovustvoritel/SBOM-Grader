@@ -1,4 +1,14 @@
 ---
+variables:
+  implementations:
+    - name: spdx23
+      variables:
+        - name: generated_spdxids
+          fieldPath: relationships[relationshipType=GENERATED_FROM]spdxElementId
+        - name: contained_spdxids
+          fieldPath: relationships[relationshipType=CONTAINS]relatedSpdxElement
+        - name: root_element_spdxids
+          fieldPath: relationships[relationshipType=DESCRIBES,spdxElementId=SPDXRef-DOCUMENT]relatedSpdxElement
 rules:
   - name: Number of packages is greater than 1
     failureMessage: Not enough packages.
@@ -29,7 +39,7 @@ rules:
       - name: spdx23
         checker:
           func_name: purl_arch
-  - name: The SPDXID for non-main packages be in the format SPDXRef-<type>-<name>-<digest>
+  - name: The SPDXID for non-main packages be in the format SPDXRef-type-name-digest
     failureMessage: Change SPDXID to SPDXRef-<type>-<name>-<digest> for image packages.
     implementations:
       - name: spdx23
@@ -59,29 +69,27 @@ rules:
     failureMessage: Add repository_id qualifier to all package purls.
     implementations:
       - name: spdx23
-        variables:
-          - name: generated_spdxids
-            fieldPath: relationships[relationshipType=GENERATED_FROM]spdxElementId
-          - name: contained_spdxids # in RPM, contained elements are source archives
-            fieldPath: relationships[relationshipType=CONTAINS]relatedSpdxElement
         fieldPath: packages[SPDXID=${generated_spdxids},SPDXID!=${contained_spdxids}]externalRefs[referenceType=purl]referenceLocator
         checker:
           str_contains: repository_id
 
-  - name: Packages are annotated with md5sig
-    failureMessage: 'Add annotation of type "OTHER" with comment "md5sig: <value>" to all RPMs'
+  - name: RPM dependency packages are annotated with sigmd5
+    failureMessage: 'Add annotation of type "OTHER" with comment "sigmd5: <value>" to all RPMs'
     implementations:
       - name: spdx23
+        fieldPath: packages[SPDXID=${generated_spdxids},SPDXID!=${contained_spdxids}]annotations[|]comment
         checker:
-          func_name: rpms_have_md5sig
+          str_startswith: 'sigmd5: '
 
 
   - name: Main element has cpe22 locator
     failureMessage: Add cpe22Type locator to element described by SPDXRef-DOCUMENT
     implementations:
       - name: spdx23
+        fieldPath: packages[SPDXID=${root_element_spdxids}]externalRefs[referenceType=cpe22Type]referenceLocator
         checker:
-          func_name: main_element_cpe22
+          neq: FIELD_NOT_FOUND
+
   - name: Non-main elements have a purl with arch and repository_id qualifiers
     failureMessage: Add arch and repository_id qualifiers to purls where possible.
     implementations:

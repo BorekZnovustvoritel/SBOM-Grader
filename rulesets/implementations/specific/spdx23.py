@@ -119,35 +119,6 @@ def purl_has_repo_and_tag_qualifiers(purl: str):
     assert "tag" in purl.qualifiers
 
 
-def rpms_have_md5sig(doc: dict):
-    rpm_spdxids = list(_get_rpms_spdxids(doc))
-    for spdxid in rpm_spdxids:
-        packages = list(
-            filter(lambda x: x["SPDXID"] == spdxid, doc.get("packages", []))
-        )
-        assert packages, f"No package found for dependency with SPDXID {spdxid}"
-        assert len(packages) == 1, f"{spdxid} is not unique."
-        package = packages[0]
-        assert (
-            "annotations" in package
-        ), f"Package {spdxid} does not have any annotations."
-        correct_annotations = 0
-        for annotation in package["annotations"]:
-            if annotation.get("comment", "").startswith("sigmd5: "):
-                correct_annotations += 1
-        assert (
-            correct_annotations
-        ), f"No annotations with RPM signature sigmd5 found for {spdxid}"
-
-
-def main_element_cpe22(doc: dict):
-    for main_package in _get_main_packages(doc):
-        assert any(
-            ref.get("referenceType") == "cpe22Type"
-            for ref in main_package.get("externalRefs")
-        ), f"Package does not have cpe22Type: {main_package['SPDXID']}"
-
-
 def non_main_repo_arch_qualifiers(doc: dict):
     main_package_SPDXIDs = {p.get("SPDXID") for p in _get_main_packages(doc)}
     for package in doc.get("packages", []):

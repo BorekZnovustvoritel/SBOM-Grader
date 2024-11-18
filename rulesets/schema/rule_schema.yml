@@ -7,6 +7,34 @@ type: object
 required:
   - rules
 properties:
+  variables:
+    type: object
+    properties:
+      implementations:
+        type: array
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            variables:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  fieldPath:
+                    type: string
+                required:
+                  - name
+                  - fieldPath
+                additionalProperties: false
+          required:
+            - name
+            - variables
+          additionalProperties: false
+    additionalProperties: false
   rules:
     description: The rules
     type: array

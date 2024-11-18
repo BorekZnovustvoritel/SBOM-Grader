@@ -51,7 +51,7 @@ rules:
           not_in:
             - FIELD_NOT_PRESENT
             - ""
-  - name: All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
+  - name: All files SPDXIDs have format SPDXRef-File-filename-digest
     failureMessage: Change files SPDXIDs to format SPDXRef-File-<filename>-<digest>.
     implementations:
       - name: spdx23

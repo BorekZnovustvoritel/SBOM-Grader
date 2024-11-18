@@ -1,9 +1,11 @@
 import json
+import sys
 from copy import copy
 from dataclasses import fields, dataclass, field
 from pathlib import Path
 from typing import Iterable, Any
 
+import jsonschema.exceptions
 import yaml
 
 from core.cookbooks import Cookbook, CookbookResult
@@ -72,9 +74,15 @@ class CookbookBundle:
         cookbook_bundle = CookbookBundle([])
         if dir_path.is_dir():
             for entity in dir_path.iterdir():
-                if not entity.is_file():
+                if not entity.is_file() or (
+                    not entity.name.endswith(".yml")
+                    and not entity.name.endswith(".yaml")
+                ):
                     continue
-                cookbook_bundle += Cookbook.from_file(entity)
+                try:
+                    cookbook_bundle += Cookbook.from_file(entity)
+                except jsonschema.exceptions.ValidationError:
+                    print(f"Could not load file {entity.absolute()}", file=sys.stderr)
         return cookbook_bundle
 
     @property
@@ -117,7 +125,11 @@ class CookbookBundle:
     ) -> "CookbookBundle":
         sbom_type = doc.sbom_type
         if sbom_type is SBOMType.UNKNOWN:
-            raise ValueError("SBOM Type could not be determined.")
+            print(
+                "Could not determine SBOM type automatically. Trying all possibilities.",
+                file=sys.stderr,
+            )
+            return CookbookBundle.from_directory(COOKBOOKS_DIR)
         cookbook_identifiers = []
         if sbom_type is SBOMType.PRODUCT:
             cookbook_identifiers.append(COOKBOOKS_DIR / (sbom_type.value + ".yml"))

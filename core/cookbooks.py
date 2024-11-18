@@ -1,8 +1,10 @@
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Any
 
+import jsonschema
 import yaml
 from jsonschema.validators import validate
 from sympy import euler
@@ -168,7 +170,14 @@ class Cookbook:
     def from_file(file_path: str | Path) -> "Cookbook":
         file_path = Path(file_path)
         schema_dict = get_mapping(file_path)
-        validate(schema_dict, get_mapping(COOKBOOK_VALIDATION_SCHEMA_PATH))
+        try:
+            validate(schema_dict, get_mapping(COOKBOOK_VALIDATION_SCHEMA_PATH))
+        except jsonschema.exceptions.ValidationError as e:
+            print(
+                f"Could not parse Cookbook from file {file_path.absolute()}",
+                file=sys.stderr,
+            )
+            raise e
 
         return Cookbook(
             file_path.name.rsplit(".", 1)[0],
