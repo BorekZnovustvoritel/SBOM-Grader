@@ -70,7 +70,7 @@ properties:
                   additionalProperties: false
               fieldPath:
                 type: string
-              minimum_tested_elements:
+              minimumTestedElements:
                 type: integer
                 default: 1
               checker:

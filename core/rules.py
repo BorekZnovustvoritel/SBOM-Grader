@@ -215,7 +215,7 @@ class RuleSet:
                 for var_obj in spec_variables:
                     var_dict[var_obj["name"]] = var_obj["fieldPath"]
 
-                minimum_tested_elements = spec.get("minimum_tested_elements", 1)
+                minimum_tested_elements = spec.get("minimumTestedElements", 1)
 
                 all_rules[implementation_name][name] = Rule(
                     name=name,

@@ -40,7 +40,7 @@ rules:
         checker:
           func_name: purl_arch
   - name: The SPDXID for non-main packages be in the format SPDXRef-type-name-digest
-    failureMessage: Change SPDXID to SPDXRef-<type>-<name>-<digest> for image packages.
+    failureMessage: Change SPDXID to SPDXRef-type-name-digest for image packages.
     implementations:
       - name: spdx23
         checker:

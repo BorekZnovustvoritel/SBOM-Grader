@@ -10,7 +10,7 @@ from core.utils import get_mapping, validation_passed
 
 
 def main():
-    parser = ArgumentParser("sbomgrader")
+    parser = ArgumentParser()
     parser.add_argument(
         "input", type=Path, help="SBOM File to grade. Currently supports JSON."
     )
