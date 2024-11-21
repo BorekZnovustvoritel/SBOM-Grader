@@ -4004,7 +4004,7 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:oci/rhel9-go-toolset@sha256:354b40a0fdcd1a9dd9af1b88f9a45fc2b0c8065980dfd9b5097e137a7db6e0bd?tag=1.19.4-18"
+          "referenceLocator": "pkg:oci/rhel9-go-toolset@sha256:354b40a0fdcd1a9dd9af1b88f9a45fc2b0c8065980dfd9b5097e137a7db6e0bd?tag=1.19.4-18&repository_url=NOASSERTION"
         }
       ],
       "checksums": [

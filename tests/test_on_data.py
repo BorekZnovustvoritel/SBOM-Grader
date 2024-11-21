@@ -1,7 +1,7 @@
 import pytest
 
-from rules.cookbooks import Cookbook
-from rules.rule import Document
+from core.cookbooks import Cookbook
+from core.documents import Document
 
 
 @pytest.mark.parametrize(
@@ -21,6 +21,7 @@ def test_success_cookbook_build(sbom_fixture_name, cookbook_fixture_name, reques
     sbom_doc: Document = request.getfixturevalue(sbom_fixture_name)
     res = cookbook(sbom_doc)
     assert res.result.ran
+    assert not res.result.not_implemented
     unsuccessful = res.get_unsuccessful()
     assert not unsuccessful.may
     assert not unsuccessful.should

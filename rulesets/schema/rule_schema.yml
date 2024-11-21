@@ -7,6 +7,34 @@ type: object
 required:
   - rules
 properties:
+  variables:
+    type: object
+    properties:
+      implementations:
+        type: array
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            variables:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  fieldPath:
+                    type: string
+                required:
+                  - name
+                  - fieldPath
+                additionalProperties: false
+          required:
+            - name
+            - variables
+          additionalProperties: false
+    additionalProperties: false
   rules:
     description: The rules
     type: array
@@ -20,13 +48,6 @@ properties:
           type: string
         failureMessage:
           type: string
-        force:
-          description: This can be overwritten elsewhere.
-          type: string
-          enum:
-            - MUST
-            - SHOULD
-            - MAY
         implementations:
           type: array
           items:
@@ -37,8 +58,21 @@ properties:
             properties:
               name:
                 type: string
+              variables:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    fieldPath:
+                      type: string
+                  additionalProperties: false
               fieldPath:
                 type: string
+              minimumTestedElements:
+                type: integer
+                default: 1
               checker:
                 type: object
                 properties:

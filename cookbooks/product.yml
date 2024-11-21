@@ -2,22 +2,21 @@
 MUST:
   # general
   - Document passes schema validation
+  # specific
+  - Main element is a package
+  - Number of packages is greater than 1
 SHOULD:
   # general
   - All named packages have a versionInfo
   - License list has correct form
   - Creation time is valid
   - All packages are referenced in relationships
-#  - All packages have a checksum
   - All packages have a supplier
-#  - All packages have at least one PURL
   # specific
   - Number of packages is greater than 1
-  - Main element has cpe22 locator
-  - Non-main elements have a purl with arch and repository_id qualifiers
-MAY:
-  # general
-  - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
+  - RPM packages have a repository_id qualifier in PURLs
+  - RPM packages have an arch qualifier in PURLs
+  - All Image PURLs contain qualifier repository_url and tag
 rulesets:
   - general
   - specific

@@ -4,7 +4,6 @@ MUST:
   - Document passes schema validation
   # specific
   - Main element is a package
-  - Number of packages is greater than 1
 SHOULD:
   # general
   - All named packages have a versionInfo
@@ -14,11 +13,12 @@ SHOULD:
   - All packages have a checksum
   - All packages have a supplier
   - All packages have at least one externalRef
-  # specific
-  - Main element is a package
-  - Number of packages is greater than 1
+  # IMAGE
+  - All Image PURLs contain qualifier repository_url and tag
+  # RPM
+  - RPM packages have packageFileName
   - RPM packages have a repository_id qualifier in PURLs
-  - RPM packages are annotated with sigmd5
+  - RPM packages have an arch qualifier in PURLs
 rulesets:
   - general
   - specific

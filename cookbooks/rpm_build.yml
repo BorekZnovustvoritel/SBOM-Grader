@@ -2,6 +2,8 @@
 MUST:
   # general
   - Document passes schema validation
+  # specific
+  - Main element is a package
 SHOULD:
   # general
   - All named packages have a versionInfo
@@ -10,14 +12,13 @@ SHOULD:
   - All packages are referenced in relationships
   - All packages have a checksum
   - All packages have a supplier
-  - All packages have at least one PURL
+  - All packages have at least one externalRef
   # specific
+  - Main element is a package
   - Number of packages is greater than 1
-  - Packages are annotated with md5sig
 MAY:
-  # general
-  - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
   # specific
+  - RPM packages are annotated with sigmd5
 rulesets:
   - general
   - specific

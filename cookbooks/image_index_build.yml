@@ -12,14 +12,11 @@ SHOULD:
   - All packages are referenced in relationships
   - All packages have a checksum
   - All packages have a supplier
-  - All packages have at least one PURL
+  - All packages have at least one externalRef
   # specific
   - Number of packages is greater than 1
   - All image packages are VARIANT_OF the image index
-  - All non-main packages have an arch qualifier purl
-MAY:
-  - All files SPDXIDs have format SPDXRef-File-<filename>-<digest>
-  - The SPDXID for non-main packages be in the format SPDXRef-<type>-<name>-<digest>
+  - All non-main image packages have an arch qualifier purl
 rulesets:
   - general
   - specific
