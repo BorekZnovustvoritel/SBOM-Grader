@@ -51,18 +51,28 @@ rules:
           not_in:
             - FIELD_NOT_PRESENT
             - ""
-  - name: All files SPDXIDs have format SPDXRef-File-filename-digest
-    failureMessage: Change files SPDXIDs to format SPDXRef-File-<filename>-<digest>.
-    implementations:
-      - name: spdx23
-        fieldPath: ?.files[&]SPDXID
-        minimum_tested_elements: 0
-        checker:
-          str_matches_regex: 'SPDXRef-File-\w+-[a-z0-9]+'
-  - name: All packages have at least one PURL
+  - name: All packages have at least one externalRef
     failureMessage: Add purl identifier to all packages.
     implementations:
       - name: spdx23
-        fieldPath: packages[&]externalRefs[|]referenceType
+        fieldPath: packages[&]externalRefs
         checker:
-          eq: purl
+          length_gt: 0
+  - name: Number of packages is greater than 1
+    failureMessage: Not enough packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages
+        checker:
+          length_gt: 1
+  - name: Main element is a package
+    failureMessage: SPDXRef-DOCUMENT has to reference an object of type package.
+    implementations:
+      - name: spdx23
+        variables:
+          - name: main_spdxids
+            fieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]relatedSpdxElement
+        fieldPath: packages[SPDXID=${main_spdxids}]
+        checker:
+          neq: FIELD_NOT_FOUND
+

@@ -71,3 +71,12 @@ class OutputType(Enum):
     YAML = "yaml"
     JSON = "json"
     VISUAL = "visual"
+
+
+class QueryType(Enum):
+    EACH = "&"
+    ANY = "|"
+    EQ = "="
+    NEQ = "!="
+    STARTSWITH = "%="
+    ENDSWITH = "=%"

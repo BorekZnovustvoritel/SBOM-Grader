@@ -1,8 +1,130 @@
 import re
 from collections import defaultdict
+from dataclasses import dataclass
+from functools import partial
+from re import match
 from typing import Union, Any, Callable
 
-from core.definitions import FIELD_NOT_PRESENT, FieldNotPresentError
+from core.definitions import FIELD_NOT_PRESENT, FieldNotPresentError, operation_map
+from core.enums import QueryType
+
+
+class PathParser:
+    def __init__(self, path: str):
+        self._path = path
+        self.char_no = 0
+        self.next_is_query = False
+
+    def __create_field(
+        self, field: str, next_is_query: bool
+    ) -> Union[str, "QueryParser"]:
+        if self.next_is_query:
+            next_ = QueryParser(field)
+        else:
+            next_ = field
+        self.next_is_query = next_is_query
+        return next_
+
+    def next(self) -> Union[str, list["QueryParser"], None]:
+        in_block = 1 if self.next_is_query else 0
+        buffer = ""
+        for char in self._path[self.char_no :]:
+            self.char_no += 1
+            if char == "[":
+                if not in_block:
+                    return self.__create_field(buffer, True)
+                buffer += char
+                in_block += 1
+            elif char == "]":
+                in_block -= 1
+                if not in_block:
+                    return self.__create_field(buffer, False)
+                buffer += char
+            elif char == ".":
+                if not in_block:
+                    return self.__create_field(buffer, False)
+                buffer += char
+            else:
+                buffer += char
+        if buffer:
+            return self.__create_field(buffer, False)
+        return None
+
+    @property
+    def all(self) -> list[Union[str, "QueryParser"]]:
+        backup = self.char_no
+        self.char_no = 0
+        ans = []
+        step = self.next()
+        while step is not None:
+            ans.append(step)
+            step = self.next()
+        self.char_no = backup
+        return ans
+
+
+@dataclass
+class Query:
+    type_: QueryType
+    value: str | None
+    field_path: PathParser | None
+
+    @property
+    def variable(self) -> str | None:
+        if self.value and (match := re.match(r"^\$\{(?P<varname>\w+)\}$", self.value)):
+            return match.group("varname")
+
+
+class QueryParser:
+    def __init__(self, path: str):
+        self._path = path
+
+    def parse(self) -> list[Query]:
+        if self._path in {"&", "|"}:
+            return [Query(type_=QueryType(self._path), value=None, field_path=None)]
+        queries = []
+        field_buffer = ""
+        operation_buffer = ""
+        value_buffer = ""
+        in_block = 0
+        after_operation = False
+        for char in self._path:
+            if char in {"!", "=", "%"} and not in_block:
+                operation_buffer += char
+                after_operation = True
+            elif after_operation and char != ",":
+                value_buffer += char
+            elif char == "," and after_operation:
+                queries.append(
+                    Query(
+                        type_=QueryType(operation_buffer),
+                        field_path=PathParser(field_buffer),
+                        value=value_buffer,
+                    )
+                )
+                field_buffer = ""
+                operation_buffer = ""
+                value_buffer = ""
+                after_operation = False
+            elif char == "[":
+                field_buffer += char
+                in_block += 1
+            elif char == "]":
+                in_block -= 1
+                field_buffer += char
+
+            else:
+                field_buffer += char
+
+        if field_buffer or operation_buffer or value_buffer:
+            queries.append(
+                Query(
+                    type_=QueryType(operation_buffer),
+                    field_path=PathParser(field_buffer),
+                    value=value_buffer,
+                )
+            )
+        return queries
 
 
 class FieldResolver:
@@ -17,7 +139,7 @@ class FieldResolver:
     def var_definitions(self) -> dict[str, str]:
         return self._uninitialized_vars
 
-    def resolve_variables(self, doc: dict[str, Any]) -> dict[str, Any]:
+    def resolve_variables(self, doc: dict[str, Any]) -> dict[str, set]:
         # first resolve dependency tree for variables
         dependencies = {}
         for variable_name, variable_path in self._uninitialized_vars.items():
@@ -29,7 +151,7 @@ class FieldResolver:
             assert (
                 variable_name not in dependencies[variable_name]
             ), f"Self referencing variable {variable_name} found."
-        resolved_variables = defaultdict(set)
+        resolved_variables: dict[str, set] = {}
         while not all(var_name in resolved_variables for var_name in dependencies):
             # Get a var with no dependencies
             var_name, var_deps = sorted(dependencies.items(), key=lambda x: len(x[1]))[
@@ -39,12 +161,15 @@ class FieldResolver:
                 not var_deps
             ), f"Circular variable reference found for variable {var_name}"
 
+            resolved_variables[var_name] = set()
+
             def add_to_variable(value: Any) -> None:
                 resolved_variables[var_name].add(value)
 
+            path = PathParser(self._uninitialized_vars[var_name]).all
             self._run_on_path(
                 doc,
-                re.split(r"[\[\.\]]", self._uninitialized_vars[var_name]),
+                path,
                 resolved_variables,
                 "",
                 add_to_variable,
@@ -56,87 +181,133 @@ class FieldResolver:
             for dep in dependencies.values():
                 if var_name in dep:
                     dep.remove(var_name)
-        return dict(resolved_variables)
+        return resolved_variables
 
     def _run_on_path(
         self,
         doc_: Union[dict, list[Any], FIELD_NOT_PRESENT],
-        path: list[str],
+        path: list[str | QueryParser | PathParser],
         variables: dict[str, Any],
         path_tried: str,
         func_to_run: Callable[[Any], Any],
         accept_not_present_field: bool,
         ran_on: set[str],
     ):
+
         if not accept_not_present_field and doc_ is FIELD_NOT_PRESENT:
             raise FieldNotPresentError("Field not present: ", path_tried)
-        if path:
-            step = path[0]
-            if "=" in step:
-                # Query
-                assert isinstance(
-                    doc_, list
-                ), f"Incorrect path to field: {path_tried}[{step}]"
-                sub_queries = step.split(",")
-                fields_to_skip = set()
-                for sub_query in sub_queries:
-                    if match := re.match(
-                        r"^(?P<field>\w+)(?P<operation>[=!]+)\${(?P<varname>\w+)}$",
-                        sub_query,
-                    ):
-                        field_ = match.group("field")
-                        operation = match.group("operation")
-                        varname = match.group("varname")
-                        assert (
-                            varname in variables
-                        ), f"Unknown query variable: {varname}."
-                        val_to_check = variables[varname]
-                        is_variable = True
-                    else:
-                        match = re.match(
-                            r"^(?P<field>\w+)(?P<operation>[=!]+)(?P<val>[\w\-\.]+)$",
-                            sub_query,
-                        )
-                        field_ = match.group("field")
-                        operation = match.group("operation")
-                        val_to_check = match.group("val")
-                        is_variable = False
-                    for idx, item in enumerate(doc_):
-                        field_val = item.get(field_, FIELD_NOT_PRESENT)
-
-                        if operation == "!=" and (
-                            # Vals from variables are always a set
-                            (not is_variable and field_val == val_to_check)
-                            or (is_variable and field_val in val_to_check)
-                        ):
-                            fields_to_skip.add(idx)
-                        elif operation == "=" and (
-                            # Vals from variables are always a set
-                            (not is_variable and field_val != val_to_check)
-                            or (is_variable and field_val not in val_to_check)
-                        ):
-                            fields_to_skip.add(idx)
-                for idx, item in enumerate(doc_):
-                    if idx in fields_to_skip:
-                        continue
+        if not path:
+            # The path has ended
+            try:
+                resp = func_to_run(doc_)
+                ran_on.add(path_tried)
+                assert resp is True or resp is None
+            except Exception as e:
+                message_to_return = (
+                    f"Check did not pass for item: {doc_} at path: {path_tried}"
+                    + "\n".join(str(m) for m in e.args)
+                )
+                raise type(e)(message_to_return)
+            return
+        step = path[0]
+        if isinstance(step, str):
+            # Field name
+            assert isinstance(
+                doc_, dict
+            ), f"Cannot access field '{step}' on other objects than dicts. Provided object: {doc_}"
+            if step == "?":
+                assert path[1:] and isinstance(
+                    path[1], str
+                ), "Cannot use ? before anything else than a field name."
+                if path[1] in doc_:
                     self._run_on_path(
-                        item,
+                        doc_,
                         path[1:],
                         variables,
-                        path_tried + f"[{idx}]",
+                        path_tried,
                         func_to_run,
                         accept_not_present_field,
                         ran_on,
                     )
+            else:
+                self._run_on_path(
+                    doc_.get(step, FIELD_NOT_PRESENT),
+                    path[1:],
+                    variables,
+                    path_tried + f".{step}",
+                    func_to_run,
+                    accept_not_present_field,
+                    ran_on,
+                )
+        elif isinstance(step, QueryParser):
+            assert isinstance(
+                doc_, list
+            ), f"Queries can only be performed on lists! Provided item: {doc_}"
+            queries = step.parse()
 
-            elif step == "|":
-                # Any
-                assert isinstance(
-                    doc_, list
-                ), f"Incorrect path to field: {path_tried}[|]."
-                failed = 0
-                assertions = []
-                for idx, item in enumerate(doc_):
+            to_use = []
+            can_fail_for_some = False
+            use_all = False
+
+            if all(query.type_ in {QueryType.EACH, QueryType.ANY} for query in queries):
+                # Use every index available
+                use_all = True
+                if all(query.type_ is QueryType.ANY for query in queries):
+                    can_fail_for_some = True
+            else:
+                for query in queries:
+                    to_use_in_query = set()
+                    for idx, item in enumerate(doc_):
+                        varname = query.variable
+                        if query.type_ is QueryType.EQ:
+                            if varname:
+                                func = lambda x: x in variables[varname]
+                            else:
+                                func = lambda x: str(x) == query.value
+                        elif query.type_ is QueryType.NEQ:
+                            if varname:
+                                func = lambda x: x not in variables[varname]
+                            else:
+                                func = lambda x: str(x) != query.value
+                        elif query.type_ is QueryType.STARTSWITH:
+                            if varname:
+                                func = lambda x: isinstance(x, str) and any(
+                                    x.startswith(val) for val in variables[varname]
+                                )
+                            else:
+                                func = lambda x: isinstance(x, str) and x.startswith(
+                                    query.value
+                                )
+                        elif query.type_ is QueryType.ENDSWITH:
+                            if varname:
+                                func = lambda x: isinstance(x, str) and any(
+                                    x.endswith(val) for val in variables[varname]
+                                )
+                            else:
+                                func = lambda x: isinstance(x, str) and x.endswith(
+                                    query.value
+                                )
+                        final_func = lambda x: (
+                            to_use_in_query.add(idx) if func(x) else None
+                        )
+                        self._run_on_path(
+                            item,
+                            query.field_path.all,
+                            variables,
+                            path_tried + f"[{idx}]",
+                            final_func,
+                            True,
+                            set(),
+                        )
+                        to_use.append(to_use_in_query)
+            to_use_final = set.intersection(*to_use) if to_use else {}
+            failed = 0
+            assertions = []
+            for idx, item in enumerate(doc_):
+                if not use_all and idx not in to_use_final:
+                    continue
+
+                if can_fail_for_some:
                     try:
                         self._run_on_path(
                             item,
@@ -150,16 +321,10 @@ class FieldResolver:
                     except (AssertionError, FieldNotPresentError) as e:
                         failed += 1
                         assertions.append(e)
-                assert failed < len(
-                    doc_
-                ), f"Check did not pass for any fields. Assertions: {assertions}, path: {path_tried}"
-
-            elif step == "&":
-                # Each
-                assert isinstance(
-                    doc_, list
-                ), f"Incorrect path to field: {path_tried}[&]."
-                for idx, item in enumerate(doc_):
+                    assert failed < len(
+                        doc_
+                    ), f"Check did not pass for any fields. Assertions: {assertions}, path: {path_tried}"
+                else:
                     self._run_on_path(
                         item,
                         path[1:],
@@ -170,61 +335,6 @@ class FieldResolver:
                         ran_on,
                     )
 
-            elif step == "?":
-                # Skippable if not present
-                assert isinstance(
-                    doc_, dict
-                ), "Skippable fields only apply on dictionaries"
-                if path[1:] and path[1] in doc_:
-                    self._run_on_path(
-                        doc_.get(path[1]),
-                        path[2:],
-                        variables,
-                        path_tried,
-                        func_to_run,
-                        accept_not_present_field,
-                        ran_on,
-                    )
-
-            elif step.isdigit():
-                # Element on an index
-                assert isinstance(
-                    doc_, list
-                ), f"Incorrect path to field: {path_tried}[{step}]"
-                self._run_on_path(
-                    doc_[int(step)],
-                    path[1:],
-                    variables,
-                    path_tried + f"[{step}]",
-                    func_to_run,
-                    accept_not_present_field,
-                    ran_on,
-                )
-
-            else:
-                # Name of the field
-                self._run_on_path(
-                    doc_.get(step, FIELD_NOT_PRESENT),
-                    path[1:],
-                    variables,
-                    path_tried + f".{step}",
-                    func_to_run,
-                    accept_not_present_field,
-                    ran_on,
-                )
-        else:
-            # The path has ended
-            try:
-                resp = func_to_run(doc_)
-                ran_on.add(path_tried)
-                assert resp is True or resp is None
-            except Exception as e:
-                message_to_return = (
-                    f"Check did not pass for item: {doc_} at path: {path_tried}"
-                    + "\n".join(str(m) for m in e.args)
-                )
-                raise type(e)(message_to_return)
-
     def run_func(
         self,
         doc: dict[str, Any],
@@ -233,13 +343,13 @@ class FieldResolver:
         minimal_runs: int = 1,
         fallback_variables: dict[str, Any] | None = None,
     ) -> Any:
-        path_list = re.split(r"[\[\.\]]", field_path)
-        path_list = [item for item in path_list if item]
         variables = {} if not fallback_variables else {**fallback_variables}
         variables.update(self.resolve_variables(doc))
 
         ran_on = set()
-        self._run_on_path(doc, path_list, variables, "", func, False, ran_on)
+        self._run_on_path(
+            doc, PathParser(field_path).all, variables, "", func, False, ran_on
+        )
         assert (
             len(ran_on) >= minimal_runs
         ), "Test was not performed on any fields because no fields match given filters."

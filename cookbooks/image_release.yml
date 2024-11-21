@@ -13,13 +13,11 @@ SHOULD:
   - All packages are referenced in relationships
   - All packages have a checksum
   - All packages have a supplier
-  - All packages have at least one PURL
+  - All packages have at least one externalRef
   # specific
   - Main element has an arch qualifier purl
-  - Non-main packages have packageFileName
-MAY:
-  # general
-  - All files SPDXIDs have format SPDXRef-File-filename-digest
+  - RPM packages have packageFileName
+  - All Image PURLs contain qualifier repository_url and tag
 rulesets:
   - general
   - specific

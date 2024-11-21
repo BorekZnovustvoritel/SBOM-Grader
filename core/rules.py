@@ -15,31 +15,9 @@ from core.definitions import (
     RULESET_VALIDATION_SCHEMA_PATH,
     FIELD_NOT_PRESENT,
     FieldNotPresentError,
+    operation_map,
 )
 from core.utils import get_mapping, get_path_to_implementations
-
-
-operation_map = {
-    "eq": lambda expected, actual: expected == actual,
-    "neq": lambda expected, actual: expected != actual,
-    "in": lambda expected, actual: actual in expected,
-    "not_in": lambda expected, actual: actual not in expected,
-    "str_startswith": lambda expected, actual: isinstance(actual, str)
-    and actual.startswith(expected),
-    "str_endswith": lambda expected, actual: isinstance(actual, str)
-    and actual.endswith(expected),
-    "str_contains": lambda expected, actual: isinstance(actual, str)
-    and expected in actual,
-    "str_matches_regex": lambda expected, actual: isinstance(actual, str)
-    and bool(re.match(expected, actual)),
-    "length_eq": lambda expected, actual: isinstance(actual, Sized)
-    and len(actual) == expected,
-    "length_gt": lambda expected, actual: isinstance(actual, Sized)
-    and len(actual) > expected,
-    "length_lt": lambda expected, actual: isinstance(actual, Sized)
-    and len(actual) < expected,
-    "func_name": None,
-}
 
 
 @dataclass

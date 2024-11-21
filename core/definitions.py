@@ -1,4 +1,6 @@
+import re
 from pathlib import Path
+from typing import Sized
 
 from core.enums import Implementation
 
@@ -27,3 +29,26 @@ FIELD_NOT_PRESENT = __FieldNotPresent()
 
 class FieldNotPresentError(ValueError):
     pass
+
+
+operation_map = {
+    "eq": lambda expected, actual: expected == actual,
+    "neq": lambda expected, actual: expected != actual,
+    "in": lambda expected, actual: actual in expected,
+    "not_in": lambda expected, actual: actual not in expected,
+    "str_startswith": lambda expected, actual: isinstance(actual, str)
+    and actual.startswith(expected),
+    "str_endswith": lambda expected, actual: isinstance(actual, str)
+    and actual.endswith(expected),
+    "str_contains": lambda expected, actual: isinstance(actual, str)
+    and expected in actual,
+    "str_matches_regex": lambda expected, actual: isinstance(actual, str)
+    and bool(re.match(expected, actual)),
+    "length_eq": lambda expected, actual: isinstance(actual, Sized)
+    and len(actual) == expected,
+    "length_gt": lambda expected, actual: isinstance(actual, Sized)
+    and len(actual) > expected,
+    "length_lt": lambda expected, actual: isinstance(actual, Sized)
+    and len(actual) < expected,
+    "func_name": None,
+}

@@ -7,7 +7,6 @@ from typing import Iterable, Any
 import jsonschema
 import yaml
 from jsonschema.validators import validate
-from sympy import euler
 
 from core.enums import Grade, RuleForce, OutputType, ResultType
 from core.utils import get_mapping
@@ -88,10 +87,14 @@ class CookbookResult:
             unsuccessful = self.get_unsuccessful()
             if unsuccessful.cookbook.all_used_rule_names:
                 ans += "\n## Failure details\n\n"
-                for rule in unsuccessful.result.failed:
-                    ans += f"\n### {rule}\n\n"
-                    detail = self.get(rule)
-                    ans += f"{detail.result_detail}\n"
+                for collection in (
+                    unsuccessful.result.failed,
+                    unsuccessful.result.errors,
+                ):
+                    for rule in collection:
+                        ans += f"\n### {rule}\n\n"
+                        detail = self.get(rule)
+                        ans += f"{detail.result_detail}\n"
 
             return ans
         if o_type is OutputType.JSON:
