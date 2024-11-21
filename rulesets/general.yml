@@ -1,4 +1,18 @@
 ---
+variables:
+  implementations:
+    - name: spdx23
+      variables:
+        - name: image_package_spdxids
+          fieldPath: packages[?.externalRefs[referenceType=purl]referenceLocator%=pkg:oci/]SPDXID
+        - name: rpm_package_spdxids
+          fieldPath: packages[?.externalRefs[referenceType=purl]referenceLocator%=pkg:rpm/]SPDXID
+        - name: source_rpm_archives_spdxids
+          fieldPath: relationships[relationshipType=CONTAINS,spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
+        - name: source_image_spdxids
+          fieldPath: relationships[relationshipType=CONTAINS,spdxElementId=${image_package_spdxids}]relatedSpdxElement
+        - name: all_packages_spdxids
+          fieldPath: packages[SPDXID!=${source_image_spdxids},SPDXID!=${source_rpm_archives_spdxids}]SPDXID
 rules:
   - name: Document passes schema validation
     failureMessage: Document did not pass schema validation.
@@ -6,11 +20,17 @@ rules:
       - name: spdx23
         checker:
           func_name: validate_schema
-  - name: All named packages have a versionInfo
+  - name: Document passes extra validation
+    failureMessage: Document did not pass extra validation.
+    implementations:
+        - name: spdx23
+          checker:
+            func_name: full_validation
+  - name: All packages have a versionInfo
     failureMessage: Add versionInfo to all packages.
     implementations:
       - name: spdx23
-        fieldPath: packages[name!=FIELD_NOT_PRESENT]versionInfo
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]versionInfo
         checker:
           neq: FIELD_NOT_PRESENT
   - name: License list has correct form
@@ -38,7 +58,7 @@ rules:
     implementations:
       - name: spdx23
         # Filter just packages and not products
-        fieldPath: packages[externalRefs[referenceCategory=PACKAGE-MANAGER]referenceLocator!=FIELD_NOT_PRESENT]checksums[&]
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]checksums[&]
         checker:
           not_in:
             - FIELD_NOT_PRESENT
@@ -47,7 +67,7 @@ rules:
     failureMessage: Add supplier to all packages.
     implementations:
       - name: spdx23
-        fieldPath: packages[&]supplier
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]supplier
         checker:
           not_in:
             - FIELD_NOT_PRESENT
@@ -56,7 +76,7 @@ rules:
     failureMessage: Add purl identifier to all packages.
     implementations:
       - name: spdx23
-        fieldPath: packages[&]externalRefs
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]externalRefs
         checker:
           length_gt: 0
   - name: Number of packages is greater than 1

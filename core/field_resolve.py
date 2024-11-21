@@ -1,4 +1,5 @@
 import re
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import partial
@@ -167,15 +168,21 @@ class FieldResolver:
                 resolved_variables[var_name].add(value)
 
             path = PathParser(self._uninitialized_vars[var_name]).all
-            self._run_on_path(
-                doc,
-                path,
-                resolved_variables,
-                "",
-                add_to_variable,
-                True,
-                set(),
-            )
+            try:
+                self._run_on_path(
+                    doc,
+                    path,
+                    resolved_variables,
+                    "",
+                    add_to_variable,
+                    False,
+                    set(),
+                )
+            except Exception as e:
+                print(
+                    f"Could not parse variable {var_name}, problem: {str(e)}",
+                    file=sys.stderr,
+                )
 
             dependencies.pop(var_name)
             for dep in dependencies.values():
@@ -242,7 +249,7 @@ class FieldResolver:
         elif isinstance(step, QueryParser):
             assert isinstance(
                 doc_, list
-            ), f"Queries can only be performed on lists! Provided item: {doc_}"
+            ), f"Queries can only be performed on lists! Tested path: {path_tried}, item: {doc_}"
             queries = step.parse()
 
             to_use = []

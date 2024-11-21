@@ -42,7 +42,7 @@ MUST:
   - Document passes schema validation
   - Main element is a package
 SHOULD:
-  - All named packages have a versionInfo
+  - All packages have a versionInfo
   - License list has correct form
   - Creation time is valid
   - All packages are referenced in relationships

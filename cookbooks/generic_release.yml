@@ -6,7 +6,8 @@ MUST:
   - Main element is a package
 SHOULD:
   # general
-  - All named packages have a versionInfo
+  - Document passes extra validation
+  - All packages have a versionInfo
   - License list has correct form
   - Creation time is valid
   - All packages are referenced in relationships

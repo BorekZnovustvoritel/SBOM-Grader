@@ -67,7 +67,9 @@ def main():
                         f"Could not find any cookbooks in directory {cookbook.absolute()}",
                         file=sys.stderr,
                     )
-            elif cookbook.is_file() and (cookbook.name.endswith(".yml") or cookbook.name.endswith(".yaml")):
+            elif cookbook.is_file() and (
+                cookbook.name.endswith(".yml") or cookbook.name.endswith(".yaml")
+            ):
                 cookbook_bundles.append(CookbookBundle([Cookbook.from_file(cookbook)]))
             else:
                 print(f"Could not find cookbook {cookbook.absolute()}", file=sys.stderr)
