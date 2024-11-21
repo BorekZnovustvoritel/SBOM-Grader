@@ -5,7 +5,7 @@ from pathlib import Path
 from core.cookbook_bundles import CookbookBundle
 from core.cookbooks import Cookbook
 from core.documents import Document
-from core.enums import Grade, SBOMTime, OutputType
+from core.enums import Grade, SBOMTime, OutputType, SBOMType
 from core.utils import get_mapping, validation_passed
 
 
@@ -19,14 +19,20 @@ def main():
         "-c",
         action="append",
         type=Path,
-        help="Cookbooks to use for validation. Might reference directories or files. Only files with '.yml' extension are taken into account.",
+        help="Cookbooks to use for validation. Might reference directories or files. Only files with '.yml' or '.yaml' extensions are taken into account.",
     )
-    # parser.add_argument()
+    parser.add_argument(
+        "--type",
+        "-tp",
+        choices=[v.value for v in SBOMType if v is not SBOMType.UNSPECIFIED],
+        default=SBOMType.UNSPECIFIED.value,
+        help="Specify SBOM type. Ignored if cookbooks argument is specified.",
+    )
     parser.add_argument(
         "--time",
-        "-t",
-        choices=[v.value for v in SBOMTime],
-        default=SBOMTime.RELEASE.value,
+        "-tm",
+        choices=[v.value for v in SBOMTime if v is not SBOMTime.UNSPECIFIED],
+        default=None,
         help="If using the standard validation, specify which SBOM type (by time) is being validated. Ignored if cookbooks argument is specified.",
     )
     parser.add_argument(
@@ -34,7 +40,7 @@ def main():
         "-g",
         choices=[v.value for v in Grade],
         default=Grade.B.value,
-        help="Minimal passing grade.",
+        help="Minimal passing grade. Default is B.",
     )
     parser.add_argument(
         "--output",
@@ -61,7 +67,7 @@ def main():
                         f"Could not find any cookbooks in directory {cookbook.absolute()}",
                         file=sys.stderr,
                     )
-            elif cookbook.is_file() and cookbook.name.endswith(".yml"):
+            elif cookbook.is_file() and (cookbook.name.endswith(".yml") or cookbook.name.endswith(".yaml")):
                 cookbook_bundles.append(CookbookBundle([Cookbook.from_file(cookbook)]))
             else:
                 print(f"Could not find cookbook {cookbook.absolute()}", file=sys.stderr)
@@ -72,8 +78,11 @@ def main():
             print("No cookbook(s) could be found.", file=sys.stderr)
             exit(1)
     else:
-        # Nothing was specified, using defaults
-        cookbook_bundle = CookbookBundle.for_document(doc, SBOMTime(args.time))
+        # Cookbooks weren't specified, using defaults
+        type_ = SBOMType(args.type)
+        if type_ is SBOMType.UNSPECIFIED:
+            type_ = doc.sbom_type
+        cookbook_bundle = CookbookBundle.for_document_type(type_, SBOMTime(args.time))
 
     result = cookbook_bundle(doc)
 

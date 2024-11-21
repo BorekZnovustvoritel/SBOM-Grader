@@ -15,12 +15,6 @@ SHOULD:
   - All packages have at least one externalRef
   # RPM
   - RPM packages have packageFileName
-  - RPM packages have a repository_id qualifier in PURLs
-MAY:
-  # general
-  - All files SPDXIDs have format SPDXRef-File-filename-digest
-  # RPM
-  - RPM dependency packages are annotated with sigmd5
 rulesets:
   - general
   - specific

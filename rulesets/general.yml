@@ -37,7 +37,8 @@ rules:
     failureMessage: Add checksums to all packages.
     implementations:
       - name: spdx23
-        fieldPath: packages[&]checksums[&]
+        # Filter just packages and not products
+        fieldPath: packages[externalRefs[referenceCategory=PACKAGE-MANAGER]referenceLocator!=FIELD_NOT_PRESENT]checksums[&]
         checker:
           not_in:
             - FIELD_NOT_PRESENT

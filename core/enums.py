@@ -35,6 +35,7 @@ class RuleForce(Enum):
 class SBOMTime(Enum):
     RELEASE = "release"
     BUILD = "build"
+    UNSPECIFIED = None
 
 
 class Grade(Enum):
@@ -64,7 +65,8 @@ class SBOMType(Enum):
     IMAGE_INDEX = "image_index"
     RPM = "rpm"
     PRODUCT = "product"
-    UNKNOWN = None
+    UNKNOWN = "generic"
+    UNSPECIFIED = None
 
 
 class OutputType(Enum):

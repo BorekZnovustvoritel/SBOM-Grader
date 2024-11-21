@@ -120,25 +120,24 @@ class CookbookBundle:
         return CookbookBundleResult(self, ans)
 
     @staticmethod
-    def for_document(
-        doc: Document, requested_stage: SBOMTime = SBOMTime.RELEASE
+    def for_document_type(
+        sbom_type: SBOMType, requested_stage: SBOMTime = SBOMTime.UNSPECIFIED
     ) -> "CookbookBundle":
-        sbom_type = doc.sbom_type
-        if sbom_type is SBOMType.UNKNOWN:
-            print(
-                "Could not determine SBOM type automatically. Trying all possibilities.",
-                file=sys.stderr,
-            )
-            return CookbookBundle.from_directory(COOKBOOKS_DIR)
         cookbook_identifiers = []
         if sbom_type is SBOMType.PRODUCT:
             cookbook_identifiers.append(COOKBOOKS_DIR / (sbom_type.value + ".yml"))
             decisive_cookbook = sbom_type.value
-        else:
-            for sbom_time in SBOMTime:
+
+        elif requested_stage is SBOMTime.UNSPECIFIED:
+            for sbom_time in SBOMTime.RELEASE, SBOMTime.BUILD:
                 cookbook_identifiers.append(
                     COOKBOOKS_DIR / f"{sbom_type.value}_{sbom_time.value}.yml"
                 )
+            decisive_cookbook = f"{sbom_type.value}_{SBOMTime.RELEASE}"
+        else:
+            cookbook_identifiers.append(
+                COOKBOOKS_DIR / f"{sbom_type.value}_{requested_stage.value}.yml"
+            )
             decisive_cookbook = f"{sbom_type.value}_{requested_stage.value}"
         return CookbookBundle(
             [Cookbook.from_file(identifier) for identifier in cookbook_identifiers],

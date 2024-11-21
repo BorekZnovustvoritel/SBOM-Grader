@@ -21,11 +21,6 @@ properties:
     type: array
     items:
       type: string
-  applyIf:
-    description: Apply if all of the following rules pass
-    type: array
-    items:
-      type: string
 required:
   - rulesets
 additionalProperties: false
