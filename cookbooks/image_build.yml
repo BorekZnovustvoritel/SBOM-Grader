@@ -15,7 +15,6 @@ SHOULD:
   - All packages have a supplier
   - All packages have at least one externalRef
   # specific
-  - Main element has an arch qualifier purl
   - Number of packages is greater than 1
   - RPM packages have packageFileName
 rulesets:

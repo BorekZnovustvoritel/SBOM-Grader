@@ -16,7 +16,6 @@ SHOULD:
   - All packages have a supplier
   - All packages have at least one externalRef
   # specific
-  - Main element has an arch qualifier purl
   - RPM packages have packageFileName
   - All Image PURLs contain qualifier repository_url and tag
 rulesets:
