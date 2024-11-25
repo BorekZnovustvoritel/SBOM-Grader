@@ -10,6 +10,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "spdx-tools>=0.8.3",
     "packageurl-python>=0.16.0",
+    "cyclonedx-python-lib>=8.5.0",
 ]
 requires-python = ">=3.12"
 readme = "README.md"

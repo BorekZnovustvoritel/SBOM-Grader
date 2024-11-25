@@ -15,58 +15,11 @@ class Document:
         for item in Implementation:
             field_to_check = SBOM_FORMAT_DEFINITION_MAPPING[item]
 
-            if self._doc.get(next(iter(field_to_check.keys()))) == next(
-                iter(field_to_check.values())
+            if all(
+                self._doc.get(key) == value for key, value in field_to_check.items()
             ):
                 return item
         raise NotImplementedError("Document is in an unsupported standard.")
-
-    def separate_trees(self) -> Iterable["Document"]:
-        """If SBOMs contain separable data, separate them so every SBOM contains only a single main element."""
-        if self.implementation is Implementation.SPDX23:
-
-            main_spdxids = [
-                relationship["relatedSpdxElement"]
-                for relationship in self._doc.get("relationships", [])
-                if relationship["spdxElementId"] == "SPDXRef-DOCUMENT"
-                and relationship["relationshipType"] == "DESCRIBES"
-            ]
-            if len(main_spdxids) < 1:
-                raise ValueError(
-                    "Invalid SPDX 2.3 document, no element is DESCRIBED_BY SPDXRef-DOCUMENT"
-                )
-            if len(main_spdxids) == 1:
-                return [self]
-            new_docs = []
-            for main_spdxid in main_spdxids:
-                # Gather all SPDXIDs related to this root
-                visited = set()
-                visited.add(main_spdxid)
-                visited_length = 1
-                starting_size = 0
-                while starting_size != visited_length:
-                    starting_size = len(visited)
-                    for relationship in self._doc.get("relationships", []):
-                        if relationship["spdxElementId"] in visited:
-                            visited.add(relationship["relatedSpdxElement"])
-                        elif relationship["relatedSpdxElement"] in visited:
-                            visited.add(relationship["spdxElementId"])
-                    visited_length = len(visited)
-
-                # Create sub-docs
-                doc = copy(self._doc)
-                for field_name in "packages", "files", "snippets":
-                    if field_name not in doc:
-                        continue
-                    doc[field_name] = []
-                    for element in self._doc.get(field_name, []):
-                        if element["SPDXID"] in visited:
-                            doc[field_name].append(element)
-                new_docs.append(Document(doc))
-            return new_docs
-
-        else:
-            raise NotImplementedError()
 
     @property
     def sbom_type(self) -> "SBOMType":
@@ -119,7 +72,10 @@ class Document:
             ) == sorted(relationships, key=sort_relationship_key):
                 return SBOMType.PRODUCT
             return SBOMType.UNKNOWN
-        #   elif self.implementation.is Implementation. ...
+        elif self.implementation is Implementation.CYCLONEDX15:
+            if self._doc.get("metadata", {}).get("component", {}).get("type") in {"operating-system"}:
+                return SBOMType.PRODUCT
+            return SBOMType.UNKNOWN
         else:
             raise NotImplementedError()
 

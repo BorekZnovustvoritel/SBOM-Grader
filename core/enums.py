@@ -3,6 +3,7 @@ from enum import Enum
 
 class Implementation(Enum):
     SPDX23 = "spdx23"
+    CYCLONEDX15 = "cdx15"
 
 
 class ResultType(Enum):

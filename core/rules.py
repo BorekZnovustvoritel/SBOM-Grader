@@ -1,9 +1,8 @@
-import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Sized, Union
+from typing import Any, Callable
 
 from jsonschema.validators import validate
 
@@ -194,6 +193,7 @@ class RuleSet:
                     var_dict[var_obj["name"]] = var_obj["fieldPath"]
 
                 minimum_tested_elements = spec.get("minimumTestedElements", 1)
+                failure_message = spec.get("failureMessage") or failure_message
 
                 all_rules[implementation_name][name] = Rule(
                     name=name,
@@ -282,6 +282,7 @@ class RuleSet:
         global_variables = {}
         if global_variables_resolver:
             global_variables = global_variables_resolver.resolve_variables(document.doc)
+        print("HI")
 
         for rule in self.all_rule_names:
             if rule not in self.selection:

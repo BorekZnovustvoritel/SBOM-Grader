@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:d59ded3777172a09693f025195b1000dc13d6f37adb2a97bcbc3c0080a98937c"
+content_hash = "sha256:1e8a099b64e2e7b1b83642fe5566e6eca4842dbf6640082e04459f65815effb8"
 
 [[metadata.targets]]
 requires_python = "==3.13.0"
@@ -123,6 +123,36 @@ marker = "python_full_version == \"3.13.0\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
+]
+
+[[package]]
+name = "cyclonedx-python-lib"
+version = "8.5.0"
+requires_python = "<4.0,>=3.8"
+summary = "Python library for CycloneDX"
+groups = ["default"]
+marker = "python_full_version == \"3.13.0\""
+dependencies = [
+    "license-expression<31,>=30",
+    "packageurl-python<2,>=0.11",
+    "py-serializable<2.0.0,>=1.1.1",
+    "sortedcontainers<3.0.0,>=2.4.0",
+]
+files = [
+    {file = "cyclonedx_python_lib-8.5.0-py3-none-any.whl", hash = "sha256:a6b6d04295cdbee27c4b8d618ba2c1c7bbd535b9666cc36b05e9d6408751a829"},
+    {file = "cyclonedx_python_lib-8.5.0.tar.gz", hash = "sha256:35f7a139042e4df17ff414fa228cec83c7e4e493bdec990847357791ca72f3a5"},
+]
+
+[[package]]
+name = "defusedxml"
+version = "0.7.1"
+requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+summary = "XML bomb protection for Python stdlib modules"
+groups = ["default"]
+marker = "python_full_version == \"3.13.0\""
+files = [
+    {file = "defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61"},
+    {file = "defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69"},
 ]
 
 [[package]]
@@ -306,6 +336,21 @@ files = [
 ]
 
 [[package]]
+name = "py-serializable"
+version = "1.1.2"
+requires_python = "<4.0,>=3.8"
+summary = "Library for serializing and deserializing Python Objects to and from JSON and XML."
+groups = ["default"]
+marker = "python_full_version == \"3.13.0\""
+dependencies = [
+    "defusedxml<0.8.0,>=0.7.1",
+]
+files = [
+    {file = "py_serializable-1.1.2-py3-none-any.whl", hash = "sha256:801be61b0a1ba64c3861f7c624f1de5cfbbabf8b458acc9cdda91e8f7e5effa1"},
+    {file = "py_serializable-1.1.2.tar.gz", hash = "sha256:89af30bc319047d4aa0d8708af412f6ce73835e18bacf1a080028bb9e2f42bdb"},
+]
+
+[[package]]
 name = "pyparsing"
 version = "3.2.0"
 requires_python = ">=3.9"
@@ -462,6 +507,17 @@ marker = "python_full_version == \"3.13.0\""
 files = [
     {file = "semantic_version-2.10.0-py2.py3-none-any.whl", hash = "sha256:de78a3b8e0feda74cabc54aab2da702113e33ac9d9eb9d2389bcf1f58b7d9177"},
     {file = "semantic_version-2.10.0.tar.gz", hash = "sha256:bdabb6d336998cbb378d4b9db3a4b56a1e3235701dc05ea2690d9a997ed5041c"},
+]
+
+[[package]]
+name = "sortedcontainers"
+version = "2.4.0"
+summary = "Sorted Containers -- Sorted List, Sorted Dict, Sorted Set"
+groups = ["default"]
+marker = "python_full_version == \"3.13.0\""
+files = [
+    {file = "sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0"},
+    {file = "sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88"},
 ]
 
 [[package]]

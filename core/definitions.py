@@ -13,7 +13,10 @@ COOKBOOK_VALIDATION_SCHEMA_PATH = (
     ROOT_DIR / "cookbooks" / "schema" / "cookbook_schema.yml"
 )
 
-SBOM_FORMAT_DEFINITION_MAPPING = {Implementation.SPDX23: {"spdxVersion": "SPDX-2.3"}}
+SBOM_FORMAT_DEFINITION_MAPPING = {
+    Implementation.SPDX23: {"spdxVersion": "SPDX-2.3"},
+    Implementation.CYCLONEDX15: {"bomFormat": "CycloneDX", "specVersion": "1.5"},
+}
 MAX_ITEM_PREVIEW_LENGTH = 50
 START_PREVIEW_CHARS = 25
 END_PREVIEW_CHARS = 20

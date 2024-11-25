@@ -44,7 +44,6 @@ MUST:
 SHOULD:
   - All packages have a versionInfo
   - License list has correct form
-  - Creation time is valid
   - All packages are referenced in relationships
 MAY:
   - All files SPDXIDs have format SPDXRef-File-filename-digest

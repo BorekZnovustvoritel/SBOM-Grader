@@ -58,6 +58,8 @@ properties:
             properties:
               name:
                 type: string
+              failureMessage:
+                type: string
               variables:
                 type: array
                 items:
