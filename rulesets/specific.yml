@@ -26,10 +26,10 @@ rules:
         checker:
           func_name: image_packages_variants
   - name: All non-main image packages have an arch qualifier purl
-    failureMessage: Add arch qualifier to purls of packages.
+    failureMessage: Add arch qualifier to at least one purl of each package.
     implementations:
       - name: spdx23
-        fieldPath: packages[SPDXID!=${root_element_spdxids},SPDXID=${image_package_spdxids}]externalRefs[referenceType=purl]referenceLocator
+        fieldPath: packages[SPDXID!=${root_element_spdxids},SPDXID=${image_package_spdxids}]externalRefs[|,referenceType=purl]referenceLocator
         checker:
           str_contains: arch=
   - name: The SPDXID for non-main image packages be in the format SPDXRef-type-name-digest
@@ -40,13 +40,6 @@ rules:
         checker:
           str_matches_regex: 'SPDXRef-[a-z]+-[\w]+-[a-z0-9]+'
   # IMAGES
-  - name: Main element has an arch qualifier purl
-    failureMessage: Add arch qualifier to main element.
-    implementations:
-      - name: spdx23
-        fieldPath: packages[SPDXID=${root_element_spdxids},SPDXID=${image_package_spdxids}]externalRefs[referenceType=purl]referenceLocator
-        checker:
-          str_contains: arch=
   - name: All Image PURLs contain qualifier repository_url and tag
     failureMessage: Add qualifiers repository_url and tag to every PURL.
     implementations:

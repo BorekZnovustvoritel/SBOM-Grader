@@ -1,12 +1,9 @@
 import re
 import sys
-from collections import defaultdict
 from dataclasses import dataclass
-from functools import partial
-from re import match
 from typing import Union, Any, Callable
 
-from core.definitions import FIELD_NOT_PRESENT, FieldNotPresentError, operation_map
+from core.definitions import FIELD_NOT_PRESENT, FieldNotPresentError
 from core.enums import QueryType
 
 
@@ -81,8 +78,6 @@ class QueryParser:
         self._path = path
 
     def parse(self) -> list[Query]:
-        if self._path in {"&", "|"}:
-            return [Query(type_=QueryType(self._path), value=None, field_path=None)]
         queries = []
         field_buffer = ""
         operation_buffer = ""
@@ -90,7 +85,7 @@ class QueryParser:
         in_block = 0
         after_operation = False
         for char in self._path:
-            if char in {"!", "=", "%"} and not in_block:
+            if char in {"!", "=", "%", "|", "&"} and not in_block:
                 operation_buffer += char
                 after_operation = True
             elif after_operation and char != ",":
@@ -99,8 +94,8 @@ class QueryParser:
                 queries.append(
                     Query(
                         type_=QueryType(operation_buffer),
-                        field_path=PathParser(field_buffer),
-                        value=value_buffer,
+                        field_path=None if not field_buffer else PathParser(field_buffer),
+                        value=None if not value_buffer else value_buffer,
                     )
                 )
                 field_buffer = ""
@@ -254,64 +249,64 @@ class FieldResolver:
 
             to_use = []
             can_fail_for_some = False
-            use_all = False
 
-            if all(query.type_ in {QueryType.EACH, QueryType.ANY} for query in queries):
-                # Use every index available
-                use_all = True
-                if all(query.type_ is QueryType.ANY for query in queries):
-                    can_fail_for_some = True
-            else:
-                for query in queries:
-                    to_use_in_query = set()
-                    for idx, item in enumerate(doc_):
-                        varname = query.variable
-                        if query.type_ is QueryType.EQ:
-                            if varname:
-                                func = lambda x: x in variables[varname]
-                            else:
-                                func = lambda x: str(x) == query.value
-                        elif query.type_ is QueryType.NEQ:
-                            if varname:
-                                func = lambda x: x not in variables[varname]
-                            else:
-                                func = lambda x: str(x) != query.value
-                        elif query.type_ is QueryType.STARTSWITH:
-                            if varname:
-                                func = lambda x: isinstance(x, str) and any(
-                                    x.startswith(val) for val in variables[varname]
-                                )
-                            else:
-                                func = lambda x: isinstance(x, str) and x.startswith(
-                                    query.value
-                                )
-                        elif query.type_ is QueryType.ENDSWITH:
-                            if varname:
-                                func = lambda x: isinstance(x, str) and any(
-                                    x.endswith(val) for val in variables[varname]
-                                )
-                            else:
-                                func = lambda x: isinstance(x, str) and x.endswith(
-                                    query.value
-                                )
-                        final_func = lambda x: (
-                            to_use_in_query.add(idx) if func(x) else None
-                        )
-                        self._run_on_path(
-                            item,
-                            query.field_path.all,
-                            variables,
-                            path_tried + f"[{idx}]",
-                            final_func,
-                            True,
-                            set(),
-                        )
-                        to_use.append(to_use_in_query)
+            for query in queries:
+                if query.type_ in {QueryType.EACH, QueryType.ANY}:
+                    # Use every list index available
+                    to_use.append(set(range(len(doc_))))
+                    if query.type_ is QueryType.ANY:
+                        can_fail_for_some = True
+                    continue
+                # Actually filter the list
+                to_use_in_query = set()
+                for idx, item in enumerate(doc_):
+                    varname = query.variable
+                    if query.type_ is QueryType.EQ:
+                        if varname:
+                            func = lambda x: x in variables[varname]
+                        else:
+                            func = lambda x: str(x) == query.value
+                    elif query.type_ is QueryType.NEQ:
+                        if varname:
+                            func = lambda x: x not in variables[varname]
+                        else:
+                            func = lambda x: str(x) != query.value
+                    elif query.type_ is QueryType.STARTSWITH:
+                        if varname:
+                            func = lambda x: isinstance(x, str) and any(
+                                x.startswith(val) for val in variables[varname]
+                            )
+                        else:
+                            func = lambda x: isinstance(x, str) and x.startswith(
+                                query.value
+                            )
+                    elif query.type_ is QueryType.ENDSWITH:
+                        if varname:
+                            func = lambda x: isinstance(x, str) and any(
+                                x.endswith(val) for val in variables[varname]
+                            )
+                        else:
+                            func = lambda x: isinstance(x, str) and x.endswith(
+                                query.value
+                            )
+                    final_func = lambda x: (
+                        to_use_in_query.add(idx) if func(x) else None
+                    )
+                    self._run_on_path(
+                        item,
+                        query.field_path.all,
+                        variables,
+                        path_tried + f"[{idx}]",
+                        final_func,
+                        True,
+                        set(),
+                    )
+                    to_use.append(to_use_in_query)
             to_use_final = set.intersection(*to_use) if to_use else {}
             failed = 0
             assertions = []
             for idx, item in enumerate(doc_):
-                if not use_all and idx not in to_use_final:
+                if idx not in to_use_final:
                     continue
 
                 if can_fail_for_some:
@@ -329,7 +324,7 @@ class FieldResolver:
                         failed += 1
                         assertions.append(e)
                     assert failed < len(
-                        doc_
+                        to_use_final
                     ), f"Check did not pass for any fields. Assertions: {assertions}, path: {path_tried}"
                 else:
                     self._run_on_path(
