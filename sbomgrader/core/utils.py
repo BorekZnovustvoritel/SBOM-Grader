@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from core.enums import Grade
+from sbomgrader.core.enums import Grade
 
 
 def get_mapping(schema: str | Path) -> dict | None:

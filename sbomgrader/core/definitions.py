@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import Sized
 
-from core.enums import Implementation
+from sbomgrader.core.enums import Implementation
 
 ROOT_DIR: Path = Path(__file__).parent.parent
 RULESET_DIR = ROOT_DIR / "rulesets"

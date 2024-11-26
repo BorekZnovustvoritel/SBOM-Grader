@@ -1,5 +1,5 @@
 [project]
-name = "sbom_grader"
+name = "sbomgrader"
 version = "0.1.0"
 description = "SBOM Grader"
 authors = [
@@ -15,6 +15,9 @@ dependencies = [
 requires-python = ">=3.12"
 readme = "README.md"
 license = {text = "MIT"}
+
+[project.scripts]
+sbomgrader = "sbomgrader.core.__main__:main"
 
 [build-system]
 requires = ["pdm-backend"]

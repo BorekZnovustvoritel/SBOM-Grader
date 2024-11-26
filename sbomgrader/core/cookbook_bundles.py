@@ -8,11 +8,11 @@ from typing import Iterable, Any
 import jsonschema.exceptions
 import yaml
 
-from core.cookbooks import Cookbook, CookbookResult
-from core.definitions import COOKBOOKS_DIR
-from core.documents import Document
-from core.enums import SBOMType, SBOMTime, OutputType, Grade
-from core.rules import RuleSet, Result
+from sbomgrader.core.cookbooks import Cookbook, CookbookResult
+from sbomgrader.core.definitions import COOKBOOKS_DIR
+from sbomgrader.core.documents import Document
+from sbomgrader.core.enums import SBOMType, SBOMTime, OutputType, Grade
+from sbomgrader.core.rules import RuleSet, Result
 
 
 @dataclass

@@ -3,7 +3,7 @@ import json
 from cyclonedx.schema import SchemaVersion
 from cyclonedx.validation.json import JsonValidator
 
-from core.definitions import FIELD_NOT_PRESENT
+from sbomgrader.core.definitions import FIELD_NOT_PRESENT
 
 
 def validate_schema(doc: dict):

@@ -23,7 +23,7 @@ partially supported in version v1.5 for Product SBOMs.
 To show the command line options, run the following command:
 
 ```bash
-python3 main.py --help
+sbomgrader --help
 ```
 
 This script uses both STDOUT and STDERR. STDOUT receives the output of the grading, while STDERR reports 

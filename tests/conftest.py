@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from core.definitions import COOKBOOKS_DIR
-from core.utils import get_mapping
-from core.cookbooks import Cookbook
-from core.rules import Document
+from sbomgrader.core.definitions import COOKBOOKS_DIR
+from sbomgrader.core.utils import get_mapping
+from sbomgrader.core.cookbooks import Cookbook
+from sbomgrader.core.rules import Document
 
 
 @pytest.fixture()

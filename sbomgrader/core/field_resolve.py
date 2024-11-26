@@ -3,14 +3,14 @@ import sys
 from dataclasses import dataclass
 from typing import Union, Any, Callable
 
-from core.definitions import (
+from sbomgrader.core.definitions import (
     FIELD_NOT_PRESENT,
     FieldNotPresentError,
     MAX_ITEM_PREVIEW_LENGTH,
     START_PREVIEW_CHARS,
     END_PREVIEW_CHARS,
 )
-from core.enums import QueryType
+from sbomgrader.core.enums import QueryType
 
 
 class PathParser:

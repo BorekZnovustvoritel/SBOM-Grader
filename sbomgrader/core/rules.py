@@ -6,17 +6,17 @@ from typing import Any, Callable
 
 from jsonschema.validators import validate
 
-from core.documents import Document
-from core.enums import ResultType
-from core.field_resolve import FieldResolver
-from core.rule_loader import RuleLoader
-from core.definitions import (
+from sbomgrader.core.documents import Document
+from sbomgrader.core.enums import ResultType
+from sbomgrader.core.field_resolve import FieldResolver
+from sbomgrader.core.rule_loader import RuleLoader
+from sbomgrader.core.definitions import (
     RULESET_VALIDATION_SCHEMA_PATH,
     FIELD_NOT_PRESENT,
     FieldNotPresentError,
     operation_map,
 )
-from core.utils import get_mapping, get_path_to_implementations
+from sbomgrader.core.utils import get_mapping, get_path_to_implementations
 
 
 @dataclass

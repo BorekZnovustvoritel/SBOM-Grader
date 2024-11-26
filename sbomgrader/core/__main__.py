@@ -1,16 +1,16 @@
 import sys
-from argparse import ArgumentParser, FileType
+from argparse import ArgumentParser
 from pathlib import Path
 
-from core.cookbook_bundles import CookbookBundle
-from core.cookbooks import Cookbook
-from core.documents import Document
-from core.enums import Grade, SBOMTime, OutputType, SBOMType
-from core.utils import get_mapping, validation_passed
+from sbomgrader.core.cookbook_bundles import CookbookBundle
+from sbomgrader.core.cookbooks import Cookbook
+from sbomgrader.core.documents import Document
+from sbomgrader.core.enums import Grade, SBOMTime, OutputType, SBOMType
+from sbomgrader.core.utils import get_mapping, validation_passed
 
 
 def main():
-    parser = ArgumentParser()
+    parser = ArgumentParser("sbomgrader")
     parser.add_argument(
         "input", type=Path, help="SBOM File to grade. Currently supports JSON."
     )

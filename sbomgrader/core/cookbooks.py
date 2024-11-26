@@ -8,14 +8,14 @@ import jsonschema
 import yaml
 from jsonschema.validators import validate
 
-from core.enums import Grade, RuleForce, OutputType, ResultType
-from core.utils import get_mapping
-from core.definitions import (
+from sbomgrader.core.enums import Grade, RuleForce, OutputType, ResultType
+from sbomgrader.core.utils import get_mapping
+from sbomgrader.core.definitions import (
     COOKBOOK_VALIDATION_SCHEMA_PATH,
     RULESET_DIR,
     ROOT_DIR,
 )
-from core.rules import RuleSet, Document, Result, ResultDetail
+from sbomgrader.core.rules import RuleSet, Document, Result, ResultDetail
 
 
 @dataclass
