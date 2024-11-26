@@ -25,7 +25,7 @@ class PathParser:
         if self.next_is_query:
             next_ = QueryParser(field)
         else:
-            next_ = field
+            next_ = field.strip()
         self.next_is_query = next_is_query
         return next_
 
@@ -91,6 +91,8 @@ class QueryParser:
         in_block = 0
         after_operation = False
         for char in self._path:
+            if re.match(r"\s", char) and not after_operation:
+                continue
             if char in {"!", "=", "%", "|", "&"} and not in_block:
                 operation_buffer += char
                 after_operation = True
@@ -118,14 +120,14 @@ class QueryParser:
                 field_buffer += char
 
             else:
-                field_buffer += char
+                field_buffer += char.strip()
 
         if field_buffer or operation_buffer or value_buffer:
             queries.append(
                 Query(
-                    type_=QueryType(operation_buffer),
-                    field_path=PathParser(field_buffer),
-                    value=value_buffer,
+                    type_=QueryType(operation_buffer.strip()),
+                    field_path=PathParser(field_buffer.strip()),
+                    value=value_buffer.strip(),
                 )
             )
         return queries

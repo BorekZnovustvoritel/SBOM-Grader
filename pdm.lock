@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:1e8a099b64e2e7b1b83642fe5566e6eca4842dbf6640082e04459f65815effb8"
+content_hash = "sha256:6c1d173511d5154983f6870727d37abf49755b6b93e3348022fca8b61a2ea509"
 
 [[metadata.targets]]
 requires_python = "==3.13.0"
@@ -403,7 +403,7 @@ name = "pyyaml"
 version = "6.0.2"
 requires_python = ">=3.8"
 summary = "YAML parser and emitter for Python"
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "python_full_version == \"3.13.0\""
 files = [
     {file = "PyYAML-6.0.2-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:c70c95198c015b85feafc136515252a261a84561b7b1d51e3384e0655ddf25ab"},
@@ -624,4 +624,20 @@ marker = "python_full_version == \"3.13.0\""
 files = [
     {file = "xmltodict-0.14.2-py2.py3-none-any.whl", hash = "sha256:20cc7d723ed729276e808f26fb6b3599f786cbc37e06c65e192ba77c40f20aac"},
     {file = "xmltodict-0.14.2.tar.gz", hash = "sha256:201e7c28bb210e374999d1dde6382923ab0ed1a8a5faeece48ab525b7810a553"},
+]
+
+[[package]]
+name = "yamllint"
+version = "1.35.1"
+requires_python = ">=3.8"
+summary = "A linter for YAML files."
+groups = ["dev"]
+marker = "python_full_version == \"3.13.0\""
+dependencies = [
+    "pathspec>=0.5.3",
+    "pyyaml",
+]
+files = [
+    {file = "yamllint-1.35.1-py3-none-any.whl", hash = "sha256:2e16e504bb129ff515b37823b472750b36b6de07963bd74b307341ef5ad8bdc3"},
+    {file = "yamllint-1.35.1.tar.gz", hash = "sha256:7a003809f88324fd2c877734f2d575ee7881dd9043360657cc8049c809eba6cd"},
 ]

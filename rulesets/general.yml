@@ -4,15 +4,25 @@ variables:
     - name: spdx23
       variables:
         - name: image_package_spdxids
-          fieldPath: packages[?.externalRefs[referenceType=purl]referenceLocator%=pkg:oci/]SPDXID
+          fieldPath: >-
+            packages[?.externalRefs[referenceType=purl]
+            referenceLocator%=pkg:oci/]SPDXID
         - name: rpm_package_spdxids
-          fieldPath: packages[?.externalRefs[referenceType=purl]referenceLocator%=pkg:rpm/]SPDXID
+          fieldPath: >-
+            packages[?.externalRefs[referenceType=purl]
+            referenceLocator%=pkg:rpm/]SPDXID
         - name: source_rpm_archives_spdxids
-          fieldPath: relationships[relationshipType=CONTAINS,spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
+          fieldPath: >-
+            relationships[relationshipType=CONTAINS,
+            spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
         - name: source_image_spdxids
-          fieldPath: relationships[relationshipType=CONTAINS,spdxElementId=${image_package_spdxids}]relatedSpdxElement
+          fieldPath: >-
+            relationships[relationshipType=CONTAINS,
+            spdxElementId=${image_package_spdxids}]relatedSpdxElement
         - name: all_packages_spdxids
-          fieldPath: packages[SPDXID!=${source_image_spdxids},SPDXID!=${source_rpm_archives_spdxids}]SPDXID
+          fieldPath: >-
+            packages[SPDXID!=${source_image_spdxids},
+            SPDXID!=${source_rpm_archives_spdxids}]SPDXID
     - name: cdx15
       variables:
         - name: all_libraries_bom_refs
@@ -30,9 +40,9 @@ rules:
   - name: Document passes extra validation
     failureMessage: Document did not pass extra validation.
     implementations:
-        - name: spdx23
-          checker:
-            func_name: full_validation
+      - name: spdx23
+        checker:
+          func_name: full_validation
   - name: All packages have a versionInfo
     failureMessage: Add versionInfo to all packages.
     implementations:
@@ -51,7 +61,7 @@ rules:
         fieldPath: creationInfo.licenseListVersion
         checker:
           str_matches_regex: '[0-9]+\.[0-9]+'
-      # Not implementable in cdx15
+          # Not implementable in cdx15
   - name: All packages are referenced in relationships
     failureMessage: Reference all packages in relationships or remove them.
     implementations:
@@ -105,7 +115,9 @@ rules:
             fieldPath: components[purl!=FIELD_NOT_PRESENT]bom-ref
           - name: components_with_cpe_bom_refs
             fieldPath: components[cpe!=FIELD_NOT_PRESENT]bom-ref
-        fieldPath: components[bom-ref!=${components_with_purl_bom_refs},bom-ref!=${components_with_cpe_bom_refs}]
+        fieldPath: >-
+          components[bom-ref!=${components_with_purl_bom_refs},
+          bom-ref!=${components_with_cpe_bom_refs}]
         minimumTestedElements: 0
         checker:
           eq: FIELD_NOT_PRESENT
@@ -127,8 +139,10 @@ rules:
       - name: spdx23
         variables:
           - name: main_spdxids
-            fieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]relatedSpdxElement
+            fieldPath: >-
+              relationships[spdxElementId=SPDXRef-DOCUMENT,
+              relationshipType=DESCRIBES]relatedSpdxElement
         fieldPath: packages[SPDXID=${main_spdxids}]
         checker:
           neq: FIELD_NOT_PRESENT
-      # Not applicable in cdx15, every component is a component
+          # Not applicable in cdx15, every component is a component

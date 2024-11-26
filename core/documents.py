@@ -73,7 +73,9 @@ class Document:
                 return SBOMType.PRODUCT
             return SBOMType.UNKNOWN
         elif self.implementation is Implementation.CYCLONEDX15:
-            if self._doc.get("metadata", {}).get("component", {}).get("type") in {"operating-system"}:
+            if self._doc.get("metadata", {}).get("component", {}).get("type") in {
+                "operating-system"
+            }:
                 return SBOMType.PRODUCT
             return SBOMType.UNKNOWN
         else:
