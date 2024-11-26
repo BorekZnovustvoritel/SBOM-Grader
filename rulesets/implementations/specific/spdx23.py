@@ -41,7 +41,8 @@ def image_packages_variants(doc: dict):
                 and x.get("spdxElementId") == package["SPDXID"]
                 and x.get("relatedSpdxElement") in main_package_SPDXIDs,
                 doc.get("relationships", []),
-            ), None
+            ),
+            None,
         ), f"Package {package["SPDXID"]} is not variant of main element."
 
 

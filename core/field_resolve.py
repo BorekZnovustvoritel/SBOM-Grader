@@ -3,7 +3,13 @@ import sys
 from dataclasses import dataclass
 from typing import Union, Any, Callable
 
-from core.definitions import FIELD_NOT_PRESENT, FieldNotPresentError
+from core.definitions import (
+    FIELD_NOT_PRESENT,
+    FieldNotPresentError,
+    MAX_ITEM_PREVIEW_LENGTH,
+    START_PREVIEW_CHARS,
+    END_PREVIEW_CHARS,
+)
 from core.enums import QueryType
 
 
@@ -94,7 +100,9 @@ class QueryParser:
                 queries.append(
                     Query(
                         type_=QueryType(operation_buffer),
-                        field_path=None if not field_buffer else PathParser(field_buffer),
+                        field_path=(
+                            None if not field_buffer else PathParser(field_buffer)
+                        ),
                         value=None if not value_buffer else value_buffer,
                     )
                 )
@@ -205,8 +213,13 @@ class FieldResolver:
                 ran_on.add(path_tried)
                 assert resp is True or resp is None
             except Exception as e:
+                item_str = str(doc_)
+                if len(item_str) > MAX_ITEM_PREVIEW_LENGTH:
+                    item_str = f"{item_str[:START_PREVIEW_CHARS]}...{item_str[-END_PREVIEW_CHARS:]}"
+                if not path_tried:
+                    path_tried = "."
                 message_to_return = (
-                    f"Check did not pass for item: {doc_} at path: {path_tried}"
+                    f"Check did not pass for item: {item_str} at path: {path_tried}\n"
                     + "\n".join(str(m) for m in e.args)
                 )
                 raise type(e)(message_to_return)
