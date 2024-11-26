@@ -1,7 +1,7 @@
 import pytest
 
-from core.cookbooks import Cookbook
-from core.documents import Document
+from sbomgrader.core.cookbooks import Cookbook
+from sbomgrader.core.documents import Document
 
 
 @pytest.mark.parametrize(

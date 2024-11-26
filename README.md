@@ -4,7 +4,8 @@ This project grades SBOMs according to [Red Hat Product Security Guide to SBOMs]
 https://redhatproductsecurity.github.io/security-data-guidelines/sbom/
 ).
 
-Currently the script only supports SPDX v2.3 in json format.
+Currently the script only fully supports SPDX v2.3 in json format. CycloneDX is
+partially supported in version v1.5 for Product SBOMs.
 
 ## Installation
 
@@ -22,7 +23,7 @@ Currently the script only supports SPDX v2.3 in json format.
 To show the command line options, run the following command:
 
 ```bash
-python3 main.py --help
+sbomgrader --help
 ```
 
 This script uses both STDOUT and STDERR. STDOUT receives the output of the grading, while STDERR reports 

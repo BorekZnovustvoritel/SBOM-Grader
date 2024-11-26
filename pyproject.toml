@@ -1,5 +1,5 @@
 [project]
-name = "sbom_grader"
+name = "sbomgrader"
 version = "0.1.0"
 description = "SBOM Grader"
 authors = [
@@ -10,10 +10,14 @@ dependencies = [
     "pyyaml>=6.0.2",
     "spdx-tools>=0.8.3",
     "packageurl-python>=0.16.0",
+    "cyclonedx-python-lib>=8.5.0",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
 license = {text = "MIT"}
+
+[project.scripts]
+sbomgrader = "sbomgrader.__main__:main"
 
 [build-system]
 requires = ["pdm-backend"]
@@ -25,4 +29,4 @@ distribution = true
 
 
 [dependency-groups]
-dev = ["black>=24.10.0", "tox>=4.23.2", "tox-pdm>=0.7.2", "pytest>=8.3.3"]
+dev = ["black>=24.10.0", "tox>=4.23.2", "tox-pdm>=0.7.2", "pytest>=8.3.3", "yamllint>=1.35.1"]

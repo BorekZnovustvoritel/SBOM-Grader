@@ -1,0 +1,103 @@
+---
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'https://redhat.com/sbomgrader/ruleschema.json'
+title: Rule Schema
+description: A schema for describing rules for SBOM validation.
+type: object
+required:
+  - rules
+properties:
+  variables:
+    type: object
+    properties:
+      implementations:
+        type: array
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            variables:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  fieldPath:
+                    type: string
+                required:
+                  - name
+                  - fieldPath
+                additionalProperties: false
+          required:
+            - name
+            - variables
+          additionalProperties: false
+    additionalProperties: false
+  rules:
+    description: The rules
+    type: array
+    items:
+      type: object
+      required:
+        - name
+        - implementations
+      properties:
+        name:
+          type: string
+        failureMessage:
+          type: string
+        implementations:
+          type: array
+          items:
+            type: object
+            required:
+              - name
+              - checker
+            properties:
+              name:
+                type: string
+              failureMessage:
+                type: string
+              variables:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    fieldPath:
+                      type: string
+                  additionalProperties: false
+              fieldPath:
+                type: string
+              minimumTestedElements:
+                type: integer
+                default: 1
+              checker:
+                type: object
+                properties:
+                  eq:
+                    description: Field should be equal to this value
+                  neq:
+                    description: Field should be not equal to this value
+                  in:
+                    type: array
+                  not_in:
+                    type: array
+                  str_startswith:
+                    type: string
+                  str_endswith:
+                    type: string
+                  str_contains:
+                    type: string
+                  str_matches_regex:
+                    type: string
+                  length:
+                    type: integer
+                  func_name:
+                    type: string
+            additionalProperties: false
+      additionalProperties: false
+additionalProperties: false

@@ -1,0 +1,148 @@
+---
+variables:
+  implementations:
+    - name: spdx23
+      variables:
+        - name: image_package_spdxids
+          fieldPath: >-
+            packages[?.externalRefs[referenceType=purl]
+            referenceLocator%=pkg:oci/]SPDXID
+        - name: rpm_package_spdxids
+          fieldPath: >-
+            packages[?.externalRefs[referenceType=purl]
+            referenceLocator%=pkg:rpm/]SPDXID
+        - name: source_rpm_archives_spdxids
+          fieldPath: >-
+            relationships[relationshipType=CONTAINS,
+            spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
+        - name: source_image_spdxids
+          fieldPath: >-
+            relationships[relationshipType=CONTAINS,
+            spdxElementId=${image_package_spdxids}]relatedSpdxElement
+        - name: all_packages_spdxids
+          fieldPath: >-
+            packages[SPDXID!=${source_image_spdxids},
+            SPDXID!=${source_rpm_archives_spdxids}]SPDXID
+    - name: cdx15
+      variables:
+        - name: all_libraries_bom_refs
+          fieldPath: components[type=library]?.bom-ref
+rules:
+  - name: Document passes schema validation
+    failureMessage: Document did not pass schema validation.
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: validate_schema
+      - name: cdx15
+        checker:
+          func_name: validate_schema
+  - name: Document passes extra validation
+    failureMessage: Document did not pass extra validation.
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: full_validation
+  - name: All packages have a versionInfo
+    failureMessage: Add versionInfo to all packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]versionInfo
+        checker:
+          neq: FIELD_NOT_PRESENT
+      - name: cdx15
+        fieldPath: metadata.component.version
+        checker:
+          neq: FIELD_NOT_PRESENT
+  - name: License list has correct form
+    failureMessage: licenseListVersion needs to have format <number>.<number>
+    implementations:
+      - name: spdx23
+        fieldPath: creationInfo.licenseListVersion
+        checker:
+          str_matches_regex: '[0-9]+\.[0-9]+'
+          # Not implementable in cdx15
+  - name: All packages are referenced in relationships
+    failureMessage: Reference all packages in relationships or remove them.
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: package_relationships
+      - name: cdx15
+        checker:
+          func_name: package_relationships
+  - name: All packages have a checksum
+    failureMessage: Add checksums to all packages.
+    implementations:
+      - name: spdx23
+        # Filter just packages and not products
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]checksums[&]
+        checker:
+          not_in:
+            - FIELD_NOT_PRESENT
+            - {}
+      - name: cdx15
+        fieldPath: components[bom-ref=${all_libraries_bom_refs}]hashes
+        checker:
+          not_in:
+            - FIELD_NOT_PRESENT
+            - {}
+  - name: All packages have a supplier
+    failureMessage: Add supplier to all packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]supplier
+        checker:
+          not_in:
+            - FIELD_NOT_PRESENT
+            - ""
+      - name: cdx15
+        fieldPath: components[&]supplier
+        checker:
+          not_in:
+            - FIELD_NOT_PRESENT
+            - {}
+  - name: All packages have at least one externalRef
+    failureMessage: Add purl identifier to all packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages[SPDXID=${all_packages_spdxids}]externalRefs
+        checker:
+          length_gt: 0
+      - name: cdx15
+        variables:
+          - name: components_with_purl_bom_refs
+            fieldPath: components[purl!=FIELD_NOT_PRESENT]bom-ref
+          - name: components_with_cpe_bom_refs
+            fieldPath: components[cpe!=FIELD_NOT_PRESENT]bom-ref
+        fieldPath: >-
+          components[bom-ref!=${components_with_purl_bom_refs},
+          bom-ref!=${components_with_cpe_bom_refs}]
+        minimumTestedElements: 0
+        checker:
+          eq: FIELD_NOT_PRESENT
+  - name: Number of packages is greater than 1
+    failureMessage: Not enough packages.
+    implementations:
+      - name: spdx23
+        fieldPath: packages
+        checker:
+          length_gt: 1
+      - name: cdx15
+        fieldPath: components
+        checker:
+          length_gt: 1
+        failureMessage: Add more components.
+  - name: Main element is a package
+    failureMessage: SPDXRef-DOCUMENT has to reference an object of type package.
+    implementations:
+      - name: spdx23
+        variables:
+          - name: main_spdxids
+            fieldPath: >-
+              relationships[spdxElementId=SPDXRef-DOCUMENT,
+              relationshipType=DESCRIBES]relatedSpdxElement
+        fieldPath: packages[SPDXID=${main_spdxids}]
+        checker:
+          neq: FIELD_NOT_PRESENT
+          # Not applicable in cdx15, every component is a component

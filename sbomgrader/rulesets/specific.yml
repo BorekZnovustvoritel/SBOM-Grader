@@ -1,0 +1,111 @@
+---
+variables:
+  implementations:
+    - name: spdx23
+      variables:
+        - name: root_element_spdxids
+          fieldPath: >-
+            relationships[relationshipType=DESCRIBES,
+            spdxElementId=SPDXRef-DOCUMENT]relatedSpdxElement
+        - name: image_package_spdxids
+          fieldPath: >-
+            packages[?.externalRefs[referenceType=purl]
+            referenceLocator%=pkg:oci/]SPDXID
+        - name: rpm_package_spdxids
+          fieldPath: >-
+            packages[?.externalRefs[referenceType=purl]
+            referenceLocator%=pkg:rpm/]SPDXID
+        - name: product_spdxids
+          fieldPath: packages[?.externalRefs[|]referenceCategory=SECURITY]SPDXID
+        - name: source_rpm_archives_spdxids
+          fieldPath: >-
+            relationships[relationshipType=CONTAINS,
+            spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
+        - name: source_image_spdxids
+          fieldPath: >-
+            relationships[relationshipType=CONTAINS,
+            spdxElementId=${image_package_spdxids}]relatedSpdxElement
+        - name: all_packages_spdxids
+          fieldPath: >-
+            packages[SPDXID!=${source_image_spdxids},
+            SPDXID!=${source_rpm_archives_spdxids}]SPDXID
+rules:
+  # IMAGE INDEX
+  - name: All image packages are VARIANT_OF the image index
+    failureMessage: All image packages have to be VARIANT_OF the image index.
+    implementations:
+      - name: spdx23
+        checker:
+          func_name: image_packages_variants
+  - name: All non-main image packages have an arch qualifier purl
+    failureMessage: Add arch qualifier to at least one purl of each package.
+    implementations:
+      - name: spdx23
+        fieldPath: >-
+          packages[SPDXID!=${root_element_spdxids},
+          SPDXID=${image_package_spdxids}]externalRefs
+          [|,referenceType=purl]referenceLocator
+        checker:
+          str_contains: arch=
+  - name: >-
+      The SPDXID for non-main image packages be in the format
+      SPDXRef-type-name-digest
+    failureMessage: >-
+      Change SPDXID to SPDXRef-type-name-digest
+      for image packages.
+    implementations:
+      - name: spdx23
+        fieldPath: >-
+          packages[SPDXID!=${root_element_spdxids},
+          SPDXID=${image_package_spdxids}]SPDXID
+        checker:
+          str_matches_regex: 'SPDXRef-[a-z]+-[\w]+-[a-z0-9]+'
+  # IMAGES
+  - name: All Image PURLs contain qualifier repository_url and tag
+    failureMessage: Add qualifiers repository_url and tag to every PURL.
+    implementations:
+      - name: spdx23
+        minimumTestedElements: 0
+        fieldPath: >-
+          packages[SPDXID=${image_package_spdxids}]
+          externalRefs[referenceType=purl]referenceLocator
+        checker:
+          func_name: purl_has_repo_and_tag_qualifiers
+  # RPM
+  - name: RPM packages have packageFileName
+    failureMessage: >-
+      This property adds info about dependencies. Add this information.
+    implementations:
+      - name: spdx23
+        minimumTestedElements: 0
+        fieldPath: packages[SPDXID=${rpm_package_spdxids}]packageFileName
+        checker:
+          neq: FIELD_NOT_FOUND
+  - name: RPM packages have a repository_id qualifier in PURLs
+    failureMessage: Add repository_id qualifier to all RPM purls.
+    implementations:
+      - name: spdx23
+        minimumTestedElements: 0
+        fieldPath: >-
+          packages[SPDXID=${rpm_package_spdxids}]externalRefs
+          [referenceType=purl]referenceLocator
+        checker:
+          str_contains: repository_id=
+  - name: RPM packages have an arch qualifier in PURLs
+    failureMessage: Add arch qualifier to all RPM purls.
+    implementations:
+      - name: spdx23
+        minimumTestedElements: 0
+        fieldPath: >-
+          packages[SPDXID=${rpm_package_spdxids}]
+          externalRefs[referenceType=purl]referenceLocator
+        checker:
+          str_contains: arch=
+  - name: RPM packages are annotated with sigmd5
+    failureMessage: >-
+      Add annotation of type "OTHER" with comment "sigmd5: <value>" to all RPMs
+    implementations:
+      - name: spdx23
+        fieldPath: packages[SPDXID=${rpm_package_spdxids}]annotations[|]comment
+        checker:
+          str_startswith: 'sigmd5: '

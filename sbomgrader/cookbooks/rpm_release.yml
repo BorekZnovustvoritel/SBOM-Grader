@@ -1,0 +1,24 @@
+---
+MUST:
+  # general
+  - Document passes schema validation
+  # specific
+  - Main element is a package
+  - Number of packages is greater than 1
+SHOULD:
+  # general
+  - Document passes extra validation
+  - All packages have a versionInfo
+  - License list has correct form
+  - All packages are referenced in relationships
+  - All packages have a checksum
+  - All packages have a supplier
+  - All packages have at least one externalRef
+  # specific
+  - Main element is a package
+  - Number of packages is greater than 1
+  - RPM packages have a repository_id qualifier in PURLs
+  - RPM packages are annotated with sigmd5
+rulesets:
+  - general
+  - specific

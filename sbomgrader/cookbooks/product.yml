@@ -1,0 +1,22 @@
+---
+MUST:
+  # general
+  - Document passes schema validation
+  # specific
+  - Main element is a package
+  - Number of packages is greater than 1
+SHOULD:
+  # general
+  - Document passes extra validation
+  - All packages have a versionInfo
+  - License list has correct form
+  - All packages are referenced in relationships
+  - All packages have a supplier
+  # specific
+  - Number of packages is greater than 1
+  - RPM packages have a repository_id qualifier in PURLs
+  - RPM packages have an arch qualifier in PURLs
+  - All Image PURLs contain qualifier repository_url and tag
+rulesets:
+  - general
+  - specific
