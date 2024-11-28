@@ -75,13 +75,16 @@ class CookbookResult:
         )
 
     def output(self, o_type: OutputType) -> str:
-        if o_type is OutputType.VISUAL:
+        if o_type in {OutputType.VISUAL, OutputType.MARKDOWN}:
             ans = f"# Cookbook: {self.cookbook.name}\n"
             ans += "\n## Summary\n"
             ans += f"\nAchieved grade: {self.grade.value}\n"
             for force in RuleForce:
+                rules_in_force = self.__get_by_force(force)
+                if not rules_in_force:
+                    continue
                 ans += f"\n### {force.value}:\n\n"
-                for result_detail in self.__get_by_force(force):
+                for result_detail in rules_in_force:
                     detail = self.get(result_detail.rule_name)
                     ans += f"- {result_detail.rule_name} {ResultType.get_visual(detail.result_type)}\n"
             unsuccessful = self.get_unsuccessful()

@@ -2,6 +2,9 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
+from rich.console import Console
+from rich.markdown import Markdown
+
 from sbomgrader.core.cookbook_bundles import CookbookBundle
 from sbomgrader.core.cookbooks import Cookbook
 from sbomgrader.core.documents import Document
@@ -87,8 +90,14 @@ def main():
         cookbook_bundle = CookbookBundle.for_document_type(type_, SBOMTime(args.time))
 
     result = cookbook_bundle(doc)
+    console = Console()
 
-    print(result.output(OutputType(args.output)))
+    output_type = OutputType(args.output)
+    if output_type is OutputType.VISUAL:
+        markdown = Markdown(result.output(output_type))
+        console.print(markdown)
+    else:
+        console.print(result.output(output_type), output_type.value)
     if validation_passed(result.grade, Grade(args.passing_grade)):
         exit(0)
     exit(1)

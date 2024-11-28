@@ -21,7 +21,7 @@ class CookbookBundleResult:
     cookbook_results: list[CookbookResult] = field(default_factory=list)
 
     def output(self, o_type: OutputType) -> str:
-        if o_type is OutputType.VISUAL:
+        if o_type in {OutputType.MARKDOWN, OutputType.VISUAL}:
             ans = "# Cookbook bundle result\n\n"
             ans += f"**Grade: {self.grade.value}**\n\n"
             ans += "## Used cookbooks\n\n"
