@@ -9,14 +9,9 @@ partially supported in version v1.5 for Product SBOMs.
 
 ## Installation
 
-- Clone this repository
-- Run 
-  ```bash 
-  python3 -m venv .venv
-  source .venv/bin/activate
-  python3 -m pip install pdm
-  pdm install
-  ``` 
+```bash
+pip install sbomgrader
+```
   
 ## Quick start
 

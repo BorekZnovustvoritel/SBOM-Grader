@@ -282,7 +282,6 @@ class RuleSet:
         global_variables = {}
         if global_variables_resolver:
             global_variables = global_variables_resolver.resolve_variables(document.doc)
-        print("HI")
 
         for rule in self.all_rule_names:
             if rule not in self.selection:
