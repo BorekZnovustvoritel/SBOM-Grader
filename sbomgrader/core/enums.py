@@ -73,6 +73,7 @@ class SBOMType(Enum):
 class OutputType(Enum):
     YAML = "yaml"
     JSON = "json"
+    MARKDOWN = "markdown"
     VISUAL = "visual"
 
 

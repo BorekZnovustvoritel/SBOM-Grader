@@ -12,6 +12,7 @@ RULESET_VALIDATION_SCHEMA_PATH = ROOT_DIR / "rulesets" / "schema" / "rule_schema
 COOKBOOK_VALIDATION_SCHEMA_PATH = (
     ROOT_DIR / "cookbooks" / "schema" / "cookbook_schema.yml"
 )
+COOKBOOK_EXTENSIONS = {".yml", ".yaml"}
 
 SBOM_FORMAT_DEFINITION_MAPPING = {
     Implementation.SPDX23: {"spdxVersion": "SPDX-2.3"},
