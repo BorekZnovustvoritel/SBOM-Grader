@@ -31,12 +31,13 @@ cookbooks for that type (e.g. if it finds that an SBOM is for an RPM, it will ru
 The release-time cookbook will take precedence in establishing the final grade.
 
 To specify the cookbook to be used, use `-c` option. This option must be a reference
-to an `.y[a]ml` file in the filesystem.
+to an `.y[a]ml` file in the filesystem or a default cookbook. To list default cookbooks,
+use option `-l`.
 
-To specify SBOM type, the tool lets you specify SBOM type `-tp` and SBOM time `-tm`.
-SBOM type ise either `product`, `image`, `image_index`, `rpm` or `generic`. Generic type
+To specify SBOM type, the tool lets you specify content type `-ct` and SBOM type `-st`.
+Component type is either `product`, `image`, `image_index`, `rpm` or `generic`. Generic type
 only checks the common features of other types, the other types are described [here]
-(https://redhatproductsecurity.github.io/security-data-guidelines/sbom/). The SBOM times
+(https://redhatproductsecurity.github.io/security-data-guidelines/sbom/). The SBOM types
 are also explained in the article linked. You can select values `build` or `release`.
 
 The default passing grade is B. This can be changed with the argument `-g` and the target value.
