@@ -15,28 +15,41 @@ from sbomgrader.core.utils import get_mapping, validation_passed
 def main():
     parser = ArgumentParser("sbomgrader")
     parser.add_argument(
-        "input", type=Path, help="SBOM File to grade. Currently supports JSON."
+        "input",
+        type=Path,
+        help="SBOM File to grade. Currently supports JSON.",
+        nargs="?",
     )
     parser.add_argument(
         "--cookbooks",
         "-c",
         action="append",
-        type=Path,
-        help="Cookbooks to use for validation. Might reference directories or files. Only files with '.yml' or '.yaml' extensions are taken into account.",
+        type=str,
+        help="Cookbooks to use for validation. "
+        "Might reference default cookbooks, directories or files. "
+        "Only files with '.yml' or '.yaml' extensions are taken into account if files or directories are specified.",
     )
     parser.add_argument(
-        "--type",
-        "-tp",
+        "--list-cookbooks",
+        "-l",
+        action="store_true",
+        default=False,
+        help="List available default cookbooks and exit.",
+    )
+    parser.add_argument(
+        "--content-type",
+        "-ct",
         choices=[v.value for v in SBOMType if v is not SBOMType.UNSPECIFIED],
         default=SBOMType.UNSPECIFIED.value,
-        help="Specify SBOM type. Ignored if cookbooks argument is specified.",
+        help="Specify SBOM content type. Ignored if cookbooks argument is specified.",
     )
     parser.add_argument(
-        "--time",
-        "-tm",
+        "--sbom-type",
+        "-st",
         choices=[v.value for v in SBOMTime if v is not SBOMTime.UNSPECIFIED],
         default=None,
-        help="If using the standard validation, specify which SBOM type (by time) is being validated. Ignored if cookbooks argument is specified.",
+        help="If using the standard validation, specify which SBOM type (by time) is being validated. "
+        "Ignored if cookbooks argument is specified.",
     )
     parser.add_argument(
         "--passing-grade",
@@ -54,15 +67,31 @@ def main():
     )
 
     args = parser.parse_args()
+    console = Console()
+    default_cookbooks = Cookbook.load_all_defaults()
+    if args.list_cookbooks:
+        console.print(Markdown("\n".join(f"- {cb.name}" for cb in default_cookbooks)))
+        exit(0)
 
     sbom_file = args.input
+    if not sbom_file:
+        print("Please supply an SBOM file.", file=sys.stderr)
+        parser.print_help(sys.stderr)
+        exit(1)
     doc = Document(get_mapping(sbom_file))
 
     cookbook_bundles = []
     if args.cookbooks:
         cookbook_bundle = CookbookBundle([])
         for cookbook in args.cookbooks:
-            cookbook: Path
+            cookbook_obj = next(
+                filter(lambda x: x.name == cookbook, default_cookbooks), None
+            )
+            if cookbook_obj:
+                # It's a default cookbook name
+                cookbook_bundle += cookbook_obj
+                continue
+            cookbook = Path(cookbook)
             if cookbook.is_dir():
                 cookbook_bundle += CookbookBundle.from_directory(cookbook)
                 if not cookbook_bundle.cookbooks:
@@ -90,7 +119,6 @@ def main():
         cookbook_bundle = CookbookBundle.for_document_type(type_, SBOMTime(args.time))
 
     result = cookbook_bundle(doc)
-    console = Console()
 
     output_type = OutputType(args.output)
     if output_type is OutputType.VISUAL:

@@ -14,6 +14,8 @@ from sbomgrader.core.definitions import (
     COOKBOOK_VALIDATION_SCHEMA_PATH,
     RULESET_DIR,
     ROOT_DIR,
+    COOKBOOKS_DIR,
+    COOKBOOK_EXTENSIONS,
 )
 from sbomgrader.core.rules import RuleSet, Document, Result, ResultDetail
 
@@ -193,8 +195,25 @@ class Cookbook:
             schema_dict.get(RuleForce.MAY.value, []),
         )
 
+    @staticmethod
+    def from_directory(dir_path: str | Path) -> list["Cookbook"]:
+        dir_path = Path(dir_path)
+        ans = []
+        for entity in dir_path.iterdir():
+            entity: Path
+            if not entity.is_file():
+                continue
+            if not any(entity.name.endswith(ext) for ext in COOKBOOK_EXTENSIONS):
+                continue
+            ans.append(Cookbook.from_file(entity))
+        return ans
+
     def __call__(self, document: dict | Document) -> CookbookResult:
         self.initialize()
         res = self._initialized_ruleset(document)
         cook_res = CookbookResult(res, self)
         return cook_res
+
+    @staticmethod
+    def load_all_defaults() -> list["Cookbook"]:
+        return Cookbook.from_directory(COOKBOOKS_DIR)
