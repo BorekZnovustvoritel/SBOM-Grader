@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.1.2...v0.1.3) (2024-12-04)
+
+
+### Bug Fixes
+
+* CLI options fixed. ([#9](https://github.com/BorekZnovustvoritel/SBOM-Grader/issues/9)) ([4aa5ef2](https://github.com/BorekZnovustvoritel/SBOM-Grader/commit/4aa5ef26584119a0e5aff4c108f44eb6cea6f61a))
+
 ## [0.1.2](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.1.1...v0.1.2) (2024-12-03)
 
 
