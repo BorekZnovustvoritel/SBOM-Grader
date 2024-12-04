@@ -113,10 +113,12 @@ def main():
             exit(1)
     else:
         # Cookbooks weren't specified, using defaults
-        type_ = SBOMType(args.type)
+        type_ = SBOMType(args.content_type)
         if type_ is SBOMType.UNSPECIFIED:
             type_ = doc.sbom_type
-        cookbook_bundle = CookbookBundle.for_document_type(type_, SBOMTime(args.time))
+        cookbook_bundle = CookbookBundle.for_document_type(
+            type_, SBOMTime(args.sbom_type)
+        )
 
     result = cookbook_bundle(doc)
 
