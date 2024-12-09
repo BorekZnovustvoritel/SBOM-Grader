@@ -16,55 +16,46 @@ from sbomgrader.core.enums import QueryType
 class PathParser:
     def __init__(self, path: str):
         self._path = path
-        self.char_no = 0
-        self.next_is_query = False
+        self._next_is_query = False
+        self._buffer = ""
+        self._ans = []
 
-    def __create_field(
-        self, field: str, next_is_query: bool
-    ) -> Union[str, "QueryParser"]:
-        if self.next_is_query:
-            next_ = QueryParser(field)
+    def __create_field(self, next_is_query: bool):
+        if self._next_is_query:
+            next_ = QueryParser(self._buffer)
         else:
-            next_ = field.strip()
-        self.next_is_query = next_is_query
-        return next_
+            next_ = self._buffer.strip()
+        self._next_is_query = next_is_query
+        self._buffer = ""
+        self._ans.append(next_)
 
-    def next(self) -> Union[str, list["QueryParser"], None]:
-        in_block = 1 if self.next_is_query else 0
-        buffer = ""
-        for char in self._path[self.char_no :]:
-            self.char_no += 1
+    def parse(self) -> list[Union[str, "QueryParser"]]:
+        if self._ans:
+            return self._ans
+        in_block = 1 if self._next_is_query else 0
+        for char in self._path:
             if char == "[":
                 if not in_block:
-                    return self.__create_field(buffer, True)
-                buffer += char
+                    self.__create_field(True)
+                else:
+                    self._buffer += char
                 in_block += 1
             elif char == "]":
                 in_block -= 1
                 if not in_block:
-                    return self.__create_field(buffer, False)
-                buffer += char
+                    self.__create_field(False)
+                else:
+                    self._buffer += char
             elif char == ".":
                 if not in_block:
-                    return self.__create_field(buffer, False)
-                buffer += char
+                    self.__create_field(False)
+                else:
+                    self._buffer += char
             else:
-                buffer += char
-        if buffer:
-            return self.__create_field(buffer, False)
-        return None
-
-    @property
-    def all(self) -> list[Union[str, "QueryParser"]]:
-        backup = self.char_no
-        self.char_no = 0
-        ans = []
-        step = self.next()
-        while step is not None:
-            ans.append(step)
-            step = self.next()
-        self.char_no = backup
-        return ans
+                self._buffer += char
+        if self._buffer:
+            self.__create_field(False)
+        return self._ans
 
 
 @dataclass
@@ -82,9 +73,11 @@ class Query:
 class QueryParser:
     def __init__(self, path: str):
         self._path = path
+        self._ans = []
 
     def parse(self) -> list[Query]:
-        queries = []
+        if self._ans:
+            return self._ans
         field_buffer = ""
         operation_buffer = ""
         value_buffer = ""
@@ -99,7 +92,7 @@ class QueryParser:
             elif after_operation and char != ",":
                 value_buffer += char
             elif char == "," and after_operation:
-                queries.append(
+                self._ans.append(
                     Query(
                         type_=QueryType(operation_buffer),
                         field_path=(
@@ -118,19 +111,18 @@ class QueryParser:
             elif char == "]":
                 in_block -= 1
                 field_buffer += char
-
             else:
-                field_buffer += char.strip()
+                field_buffer += char
 
         if field_buffer or operation_buffer or value_buffer:
-            queries.append(
+            self._ans.append(
                 Query(
                     type_=QueryType(operation_buffer.strip()),
                     field_path=PathParser(field_buffer.strip()),
                     value=value_buffer.strip(),
                 )
             )
-        return queries
+        return self._ans
 
 
 class FieldResolver:
@@ -172,7 +164,7 @@ class FieldResolver:
             def add_to_variable(value: Any) -> None:
                 resolved_variables[var_name].add(value)
 
-            path = PathParser(self._uninitialized_vars[var_name]).all
+            path = PathParser(self._uninitialized_vars[var_name]).parse()
             try:
                 self._run_on_path(
                     doc,
@@ -309,7 +301,7 @@ class FieldResolver:
                     )
                     self._run_on_path(
                         item,
-                        query.field_path.all,
+                        query.field_path.parse(),
                         variables,
                         path_tried + f"[{idx}]",
                         final_func,
@@ -365,7 +357,7 @@ class FieldResolver:
 
         ran_on = set()
         self._run_on_path(
-            doc, PathParser(field_path).all, variables, "", func, False, ran_on
+            doc, PathParser(field_path).parse(), variables, "", func, False, ran_on
         )
         assert (
             len(ran_on) >= minimal_runs
