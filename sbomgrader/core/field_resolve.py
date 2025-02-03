@@ -29,43 +29,37 @@ class PathParser:
         self.next_is_query = next_is_query
         return next_
 
-    def next(self) -> Union[str, list["QueryParser"], None]:
+
+    def parse(self) -> list[Union[str, "QueryParser"]]:
+        ans = []
         in_block = 1 if self.next_is_query else 0
         buffer = ""
-        for char in self._path[self.char_no :]:
-            self.char_no += 1
+        for char in self._path[self.char_no:]:
             if char == "[":
                 if not in_block:
-                    return self.__create_field(buffer, True)
-                buffer += char
+                    ans.append(self.__create_field(buffer, True))
+                    buffer = ""
+                else:
+                    buffer += char
                 in_block += 1
             elif char == "]":
                 in_block -= 1
                 if not in_block:
-                    return self.__create_field(buffer, False)
-                buffer += char
+                    ans.append(self.__create_field(buffer, False))
+                    buffer = ""
+                else:
+                    buffer += char
             elif char == ".":
                 if not in_block:
-                    return self.__create_field(buffer, False)
-                buffer += char
+                    ans.append(self.__create_field(buffer, False))
+                    buffer = ""
+                else:
+                    buffer += char
             else:
                 buffer += char
         if buffer:
-            return self.__create_field(buffer, False)
-        return None
-
-    @property
-    def all(self) -> list[Union[str, "QueryParser"]]:
-        backup = self.char_no
-        self.char_no = 0
-        ans = []
-        step = self.next()
-        while step is not None:
-            ans.append(step)
-            step = self.next()
-        self.char_no = backup
+            ans.append(self.__create_field(buffer, False))
         return ans
-
 
 @dataclass
 class Query:
@@ -75,7 +69,7 @@ class Query:
 
     @property
     def variable(self) -> str | None:
-        if self.value and (match := re.match(r"^\$\{(?P<varname>\w+)\}$", self.value)):
+        if self.value and (match := re.match(r"^\$\{(?P<varname>\w+)}$", self.value)):
             return match.group("varname")
 
 
@@ -133,6 +127,23 @@ class QueryParser:
         return queries
 
 
+class Variable:
+    def __init__(
+        self,
+        name: str,
+        field_path: str,
+        value_map: dict[Any, Any] = None,
+        transformer: Callable[[Any], Any] = None,
+    ):
+        self.name = name
+        self.field_path = field_path
+        self.value_map = value_map
+        self.transformer = transformer
+
+    def __hash__(self):
+        return self.name.__hash__()
+
+
 class FieldResolver:
 
     def __init__(self, variables: dict[str, str]):
@@ -172,7 +183,7 @@ class FieldResolver:
             def add_to_variable(value: Any) -> None:
                 resolved_variables[var_name].add(value)
 
-            path = PathParser(self._uninitialized_vars[var_name]).all
+            path = PathParser(self._uninitialized_vars[var_name]).parse()
             try:
                 self._run_on_path(
                     doc,
@@ -309,7 +320,7 @@ class FieldResolver:
                     )
                     self._run_on_path(
                         item,
-                        query.field_path.all,
+                        query.field_path.parse(),
                         variables,
                         path_tried + f"[{idx}]",
                         final_func,
@@ -365,7 +376,7 @@ class FieldResolver:
 
         ran_on = set()
         self._run_on_path(
-            doc, PathParser(field_path).all, variables, "", func, False, ran_on
+            doc, PathParser(field_path).parse(), variables, "", func, False, ran_on
         )
         assert (
             len(ran_on) >= minimal_runs

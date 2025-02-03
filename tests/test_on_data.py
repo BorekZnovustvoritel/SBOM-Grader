@@ -1,6 +1,6 @@
 import pytest
 
-from sbomgrader.core.cookbooks import Cookbook
+from sbomgrader.grade.cookbooks import Cookbook
 from sbomgrader.core.documents import Document
 
 

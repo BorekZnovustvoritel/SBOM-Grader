@@ -9,7 +9,7 @@ from jsonschema.validators import validate
 from sbomgrader.core.documents import Document
 from sbomgrader.core.enums import ResultType
 from sbomgrader.core.field_resolve import FieldResolver
-from sbomgrader.core.rule_loader import RuleLoader
+from sbomgrader.grade.rule_loader import RuleLoader
 from sbomgrader.core.definitions import (
     RULESET_VALIDATION_SCHEMA_PATH,
     FIELD_NOT_PRESENT,

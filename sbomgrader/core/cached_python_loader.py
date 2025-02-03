@@ -4,9 +4,8 @@ from runpy import run_path
 from typing import Callable, Union
 
 
-class RuleLoader:
-    def __init__(self, implementation: str, *file_references: str | Path):
-        self.implementation: str = implementation
+class PythonLoader:
+    def __init__(self, *file_references: str | Path):
         self._unloaded_file_references: set[Path] = set()
         self._loaded_file_references: set[Path] = set()
         self.functions: dict[str, Callable] = {}
@@ -25,8 +24,6 @@ class RuleLoader:
         for ref in self._unloaded_file_references:
             if not ref.exists():
                 continue
-            # spec = util.spec_from_file_location(self.implementation, ref)
-            # module = util.module_from_spec(spec)
             module = run_path(str(ref.absolute()))
             self.functions.update(
                 {name: value for name, value in module.items() if callable(value)}
