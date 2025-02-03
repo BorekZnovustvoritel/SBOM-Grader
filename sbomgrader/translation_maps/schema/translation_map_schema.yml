@@ -1,0 +1,69 @@
+---
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'https://redhat.com/sbomgrader/translation_map_schema.yml'
+title: Translation Map Schema
+description: Schema to validate SBOM Translation Maps.
+type: object
+properties:
+  first:
+    type: string
+    description: First SBOM format.
+  second:
+    type: string
+    description: Second SBOM format.
+  chunks:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        firstData:
+          $ref: "#/$defs/data"
+          description: Data to populate in the first SBOM type.
+        firstFieldPath:
+          type: string
+          description: Path to data in the first SBOM type.
+        secondData:
+          $ref: "#/$defs/data"
+          description: Data to populate in the second SBOM type.
+        secondFieldPath:
+          type: string
+          description: Path to data in the second SBOM type.
+      required:
+        - firstData
+        - secondData
+      additionalProperties: false
+required:
+  - first
+  - second
+  - chunks
+$defs:
+  data:
+    type: object
+    properties:
+      variables:
+        type: array
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            fieldPath:
+              type: string
+            map:
+              description: Transform known values with a map.
+            funcTransform:
+              type: string
+              description: Transform data with a Python function.
+          required:
+            - name
+            - fieldPath
+          additionalProperties: false
+        description: Variables are populated from the other format.
+      template:
+        description: Data to be inserted. Can reference variables.
+    description: Data to insert into a chunk.
+    additionalProperties: false
+    required:
+      - template
