@@ -31,6 +31,7 @@ properties:
           type: string
           description: Path to data in the second SBOM type.
       required:
+        - name
         - firstData
         - secondData
       additionalProperties: false
@@ -53,6 +54,7 @@ $defs:
               type: string
             map:
               description: Transform known values with a map.
+              type: object
             funcTransform:
               type: string
               description: Transform data with a Python function.

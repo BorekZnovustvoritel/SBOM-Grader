@@ -12,6 +12,7 @@ RULESET_VALIDATION_SCHEMA_PATH = ROOT_DIR / "rulesets" / "schema" / "rule_schema
 COOKBOOK_VALIDATION_SCHEMA_PATH = (
     ROOT_DIR / "cookbooks" / "schema" / "cookbook_schema.yml"
 )
+TRANSLATION_MAP_VALIDATION_SCHEMA_PATH = ROOT_DIR / "translation_maps" / "translation_map_schema.yml"
 COOKBOOK_EXTENSIONS = {".yml", ".yaml"}
 
 SBOM_FORMAT_DEFINITION_MAPPING = {

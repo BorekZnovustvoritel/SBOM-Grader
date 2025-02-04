@@ -8,7 +8,7 @@ from jsonschema.validators import validate
 
 from sbomgrader.core.documents import Document
 from sbomgrader.core.enums import ResultType
-from sbomgrader.core.field_resolve import FieldResolver
+from sbomgrader.core.field_resolve import FieldResolver, Variable
 from sbomgrader.grade.rule_loader import RuleLoader
 from sbomgrader.core.definitions import (
     RULESET_VALIDATION_SCHEMA_PATH,
@@ -151,9 +151,9 @@ class RuleSet:
             implementation = implementation_obj["name"]
             global_variable_definitions[implementation] = {}
             for var_obj in implementation_obj["variables"]:
-                global_variable_definitions[implementation][var_obj["name"]] = var_obj[
-                    "fieldPath"
-                ]
+                global_variable_definitions[implementation][var_obj["name"]] = Variable(
+                    var_obj["name"], var_obj["fieldPath"]
+                )
 
         all_rules = defaultdict(dict)
         for rule in schema_dict["rules"]:
@@ -190,7 +190,9 @@ class RuleSet:
                 var_dict = {}
                 spec_variables = spec.get("variables", [])
                 for var_obj in spec_variables:
-                    var_dict[var_obj["name"]] = var_obj["fieldPath"]
+                    var_dict[var_obj["name"]] = Variable(
+                        var_obj["name"], var_obj["fieldPath"]
+                    )
 
                 minimum_tested_elements = spec.get("minimumTestedElements", 1)
                 failure_message = spec.get("failureMessage") or failure_message
@@ -217,7 +219,7 @@ class RuleSet:
         implementation_loaders: dict[str, RuleLoader] | None = None,
         all_rule_names: set[str] | None = None,
         selection: set[str] | None = None,
-        variables: dict[str, dict[str, str]] | None = None,
+        variables: dict[str, dict[str, Variable]] | None = None,
     ):
         self.implementation_loaders = implementation_loaders or {}
         self.rules = rules or {}

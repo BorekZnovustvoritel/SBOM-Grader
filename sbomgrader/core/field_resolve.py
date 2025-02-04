@@ -29,12 +29,11 @@ class PathParser:
         self.next_is_query = next_is_query
         return next_
 
-
     def parse(self) -> list[Union[str, "QueryParser"]]:
         ans = []
         in_block = 1 if self.next_is_query else 0
         buffer = ""
-        for char in self._path[self.char_no:]:
+        for char in self._path[self.char_no :]:
             if char == "[":
                 if not in_block:
                     ans.append(self.__create_field(buffer, True))
@@ -60,6 +59,7 @@ class PathParser:
         if buffer:
             ans.append(self.__create_field(buffer, False))
         return ans
+
 
 @dataclass
 class Query:
@@ -130,12 +130,14 @@ class QueryParser:
 class Variable:
     def __init__(
         self,
-        name: str,
+        identifier: str,
         field_path: str,
         value_map: dict[Any, Any] = None,
         transformer: Callable[[Any], Any] = None,
     ):
-        self.name = name
+        identifier_parts = identifier.split(".", maxsplit=1)
+        self.name = identifier_parts[0]
+        self.specifier = None if len(identifier_parts) == 1 else identifier_parts[-1]
         self.field_path = field_path
         self.value_map = value_map
         self.transformer = transformer
@@ -146,28 +148,28 @@ class Variable:
 
 class FieldResolver:
 
-    def __init__(self, variables: dict[str, str]):
+    def __init__(self, variables: dict[str, Variable]):
         self._uninitialized_vars = variables
 
     def has_var(self, var_name: str) -> bool:
         return var_name in self._uninitialized_vars
 
     @property
-    def var_definitions(self) -> dict[str, str]:
+    def var_definitions(self) -> dict[str, Variable]:
         return self._uninitialized_vars
 
     def resolve_variables(self, doc: dict[str, Any]) -> dict[str, set]:
         # first resolve dependency tree for variables
         dependencies = {}
-        for variable_name, variable_path in self._uninitialized_vars.items():
-            dependencies[variable_name] = set()
-            dependencies[variable_name].update(
+        for variable in self._uninitialized_vars.values():
+            dependencies[variable.name] = set()
+            dependencies[variable.name].update(
                 match.group("varname")
-                for match in re.finditer(r"\${(?P<varname>\w+)}", variable_path)
+                for match in re.finditer(r"\${(?P<varname>\w+)}", variable.field_path)
             )
             assert (
-                variable_name not in dependencies[variable_name]
-            ), f"Self referencing variable {variable_name} found."
+                variable.name not in dependencies[variable.name]
+            ), f"Self referencing variable {variable.name} found."
         resolved_variables: dict[str, set] = {}
         while not all(var_name in resolved_variables for var_name in dependencies):
             # Get a var with no dependencies
@@ -183,7 +185,7 @@ class FieldResolver:
             def add_to_variable(value: Any) -> None:
                 resolved_variables[var_name].add(value)
 
-            path = PathParser(self._uninitialized_vars[var_name]).parse()
+            path = PathParser(self._uninitialized_vars[var_name].field_path).parse()
             try:
                 self._run_on_path(
                     doc,
