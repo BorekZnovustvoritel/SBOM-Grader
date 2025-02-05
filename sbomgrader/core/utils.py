@@ -22,10 +22,16 @@ def get_mapping(schema: str | Path) -> dict | None:
             return doc
 
 
-def get_path_to_implementations(schema_path: str | Path):
+def get_path_to_implementations(schema_path: str | Path) -> Path:
     if isinstance(schema_path, str):
         schema_path = Path(schema_path)
     return schema_path.parent / "implementations" / schema_path.name.rsplit(".", 1)[0]
+
+
+def get_path_to_var_transformers(schema_path: str | Path) -> Path:
+    if isinstance(schema_path, str):
+        schema_path = Path(schema_path)
+    return schema_path.parent / "transformers"
 
 
 def validation_passed(validation_grade: Grade, minimal_grade: Grade) -> bool:

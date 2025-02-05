@@ -11,6 +11,16 @@ properties:
   second:
     type: string
     description: Second SBOM format.
+  variables:
+    description: Global variables, populated from the original data, used for resolution in the original data.
+    type: object
+    properties:
+      first:
+        $ref: "#/$defs/variables"
+      second:
+        $ref: "#/$defs/variables"
+    additionalProperties: false
+
   chunks:
     type: array
     items:
@@ -18,6 +28,10 @@ properties:
       properties:
         name:
           type: string
+        firstVariables:
+          $ref: "#/$defs/variables"
+        secondVariables:
+          $ref: "#/$defs/variables"
         firstData:
           $ref: "#/$defs/data"
           description: Data to populate in the first SBOM type.
@@ -34,6 +48,8 @@ properties:
         - name
         - firstData
         - secondData
+        - firstFieldPath
+        - secondFieldPath
       additionalProperties: false
 required:
   - first
@@ -44,28 +60,30 @@ $defs:
     type: object
     properties:
       variables:
-        type: array
-        items:
-          type: object
-          properties:
-            name:
-              type: string
-            fieldPath:
-              type: string
-            map:
-              description: Transform known values with a map.
-              type: object
-            funcTransform:
-              type: string
-              description: Transform data with a Python function.
-          required:
-            - name
-            - fieldPath
-          additionalProperties: false
-        description: Variables are populated from the other format.
+        $ref: "#/$defs/variables"
       template:
         description: Data to be inserted. Can reference variables.
     description: Data to insert into a chunk.
     additionalProperties: false
     required:
       - template
+  variables:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        fieldPath:
+          type: string
+        map:
+          description: Transform known values with a map.
+          type: object
+        funcTransform:
+          type: string
+          description: Transform data with a Python function.
+      required:
+        - name
+        - fieldPath
+      additionalProperties: false
+    description: Variables are populated from the other format.
