@@ -13,13 +13,14 @@ COOKBOOK_VALIDATION_SCHEMA_PATH = (
     ROOT_DIR / "cookbooks" / "schema" / "cookbook_schema.yml"
 )
 TRANSLATION_MAP_VALIDATION_SCHEMA_PATH = (
-    ROOT_DIR / "translation_maps" / "translation_map_schema.yml"
+    ROOT_DIR / "translation_maps" / "schema" / "translation_map_schema.yml"
 )
 COOKBOOK_EXTENSIONS = {".yml", ".yaml"}
 
 SBOM_FORMAT_DEFINITION_MAPPING = {
     Implementation.SPDX23: {"spdxVersion": "SPDX-2.3"},
     Implementation.CYCLONEDX15: {"bomFormat": "CycloneDX", "specVersion": "1.5"},
+    Implementation.CYCLONEDX16: {"bomFormat": "CycloneDX", "specVersion": "1.6"},
 }
 MAX_ITEM_PREVIEW_LENGTH = 50
 START_PREVIEW_CHARS = 25

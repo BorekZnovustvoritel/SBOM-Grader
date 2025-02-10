@@ -19,27 +19,31 @@ from sbomgrader.core.enums import QueryType
 class PathParser:
     def __init__(self, path: str):
         self._path = path
-        self.char_no = 0
-        self.next_is_query = False
+        self.__next_is_query = False
+        self.ans: list[Union[str, QueryParser]] | None = None
 
     def __create_field(
         self, field: str, next_is_query: bool
-    ) -> Union[str, "QueryParser"]:
-        if self.next_is_query:
+    ) -> None:
+        if self.__next_is_query:
             next_ = QueryParser(field)
         else:
             next_ = field.strip()
-        self.next_is_query = next_is_query
-        return next_
+        self.__next_is_query = next_is_query
+
+        if next_:
+            self.ans.append(next_)
 
     def parse(self) -> list[Union[str, "QueryParser"]]:
-        ans = []
-        in_block = 1 if self.next_is_query else 0
+        if self.ans is not None:
+            return self.ans
+        self.ans = []
+        in_block = 1 if self.__next_is_query else 0
         buffer = ""
-        for char in self._path[self.char_no :]:
+        for char in self._path:
             if char == "[":
                 if not in_block:
-                    ans.append(self.__create_field(buffer, True))
+                    self.__create_field(buffer, True)
                     buffer = ""
                 else:
                     buffer += char
@@ -47,21 +51,21 @@ class PathParser:
             elif char == "]":
                 in_block -= 1
                 if not in_block:
-                    ans.append(self.__create_field(buffer, False))
+                    self.__create_field(buffer, False)
                     buffer = ""
                 else:
                     buffer += char
             elif char == ".":
                 if not in_block:
-                    ans.append(self.__create_field(buffer, False))
+                    self.__create_field(buffer, False)
                     buffer = ""
                 else:
                     buffer += char
             else:
                 buffer += char
         if buffer:
-            ans.append(self.__create_field(buffer, False))
-        return ans
+            self.__create_field(buffer, False)
+        return self.ans
 
 
 @dataclass
@@ -152,10 +156,12 @@ class Variable:
     def from_schema(
         schema_list: list[dict[str, Any]], transformer_file: Path = None
     ) -> dict[str, "Variable"]:
+        ans = {}
+        if not schema_list:
+            return ans
         python_loader = None
         if transformer_file:
             python_loader = PythonLoader(transformer_file)
-        ans = {}
         for item in schema_list:
             name = item["name"]
             field_path = item["fieldPath"]
@@ -518,10 +524,13 @@ class FieldResolver:
             doc, field_path, fallback_variables, True
         )
         if isinstance(field_path, list):
-            last_step = field_path[-1]
+            last_step_list = field_path[-1:]
         else:
-            last_step = PathParser(field_path).parse()[-1]
+            last_step_list = PathParser(field_path).parse()[-1:]
+        last_step = next(iter(last_step_list), None)
         for obj in objects_to_mutate:
+            if last_step is None:
+                obj.update(to_insert)
             if isinstance(last_step, str):
                 obj[last_step] = to_insert
             elif isinstance(last_step, QueryParser):

@@ -191,6 +191,8 @@ class TranslationMap:
     @staticmethod
     def from_file(file: str | Path) -> "TranslationMap":
         schema_dict = get_mapping(file)
+        print(schema_dict)
+        print(get_mapping(TRANSLATION_MAP_VALIDATION_SCHEMA_PATH))
         validate(schema_dict, get_mapping(TRANSLATION_MAP_VALIDATION_SCHEMA_PATH))
 
         first = Implementation(schema_dict["first"])
@@ -222,7 +224,7 @@ class TranslationMap:
         for chunk_dict in schema_dict["chunks"]:
             name = chunk_dict["name"]
             first_data = Data.from_schema_dict(chunk_dict["firstData"])
-            second_data = chunk_dict["secondData"]
+            second_data = Data.from_schema_dict(chunk_dict["secondData"])
             first_field_path = chunk_dict.get("firstFieldPath")
             second_field_path = chunk_dict.get("secondFieldPath")
             first_variables = Variable.from_schema(
@@ -258,9 +260,8 @@ class TranslationMap:
             self.first,
             self.second,
         }, f"This map cannot convert from {doc.implementation}."
-        convert_to = self.first if self.first != convert_from else self.second
         for chunk in self.chunks:
-            chunk.convert_and_add(doc.doc, new_data)
+            chunk.convert_and_add(doc, new_data)
         return Document(new_data)
 
 
