@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from runpy import run_path
@@ -8,7 +9,7 @@ class PythonLoader:
     def __init__(self, *file_references: str | Path):
         self._unloaded_file_references: set[Path] = set()
         self._loaded_file_references: set[Path] = set()
-        self.functions: dict[str, Callable] = {}
+        self.__functions: dict[str, Callable] = {}
 
         self.add_file_references(*file_references)
 
@@ -25,7 +26,7 @@ class PythonLoader:
             if not ref.exists():
                 continue
             module = run_path(str(ref.absolute()))
-            self.functions.update(
+            self.__functions.update(
                 {name: value for name, value in module.items() if callable(value)}
             )
         self._loaded_file_references.update(self._unloaded_file_references)
@@ -35,7 +36,9 @@ class PythonLoader:
     def file_references(self) -> set[Path]:
         return self._unloaded_file_references | self._loaded_file_references
 
-    def load_rule(self, name: str) -> Union[Callable, None]:
+    def load_func(self, name: str) -> Union[Callable, None]:
         if self._unloaded_file_references:
             self._load_all_references()
-        return self.functions.get(name, None)
+        if name not in self.__functions:
+            print(f"Could not load transformer {name} from files {self.file_references}.", file=sys.stderr)
+        return self.__functions.get(name, None)

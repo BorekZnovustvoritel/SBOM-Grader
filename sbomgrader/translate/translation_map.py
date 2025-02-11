@@ -24,25 +24,7 @@ class Data:
     def __init__(self, template: Any, variables: dict[str, Variable]):
         self.variables = variables
         self.template = template
-        self.global_field_resolver = FieldResolver(
-            {key: val for key, val in variables.items() if not val.is_relative}
-        )
-        self.relative_field_resolver = FieldResolver(
-            {key: val for key, val in variables.items() if val.is_relative}
-        )
-
-    @staticmethod
-    def from_schema_dict(dictionary: dict[str, Any]) -> "Data":
-        variable_list = dictionary.get("variables") or []
-        variables = {}
-        for var_dict in variable_list:
-            var_name = var_dict["name"]
-            var_field_path = var_dict["fieldPath"]
-            var_map = var_dict.get("map")
-            func_name = var_dict.get("funcTransform")
-            variables[var_name] = Variable(var_name, var_field_path, var_map, func_name)
-        template = dictionary["template"]
-        return Data(template, variables)
+        self.field_resolver = FieldResolver(variables)
 
     def _replace_string_with_vars(
         self, string: str, variable_values: dict[str, list[Any]]
@@ -85,7 +67,7 @@ class Data:
 
             # Run recursively in dict values
             for key, val in dic.items():
-                item[key] = self._replace_vars(val, raw_variable_values)
+                dic[key] = self._replace_vars(val, raw_variable_values)
             return dic
 
         elif isinstance(item, list):
@@ -94,10 +76,9 @@ class Data:
             return self._replace_string_with_vars(item, raw_variable_values)
         return item
 
-    def render(self, doc: Document, chunk_instance: dict[str, Any]) -> Any:
-        resolved_variables = self.global_field_resolver.resolve_variables(doc.doc)
-        resolved_variables.update(
-            self.relative_field_resolver.resolve_variables(chunk_instance)
+    def render(self, doc: Document, path_to_instance: str | None = None) -> Any:
+        resolved_variables = self.field_resolver.resolve_variables(
+            doc.doc, path_to_instance
         )
         return self._replace_vars(self.template, resolved_variables)
 
@@ -124,14 +105,21 @@ class Chunk:
         self.second_field_path = second_field_path
         self.first_variables = first_variables or {}
         self.second_variables = second_variables or {}
-        self.first_resolver = FieldResolver(first_variables)
-        self.second_resolver = FieldResolver(second_variables)
+        self.first_resolver = FieldResolver(self.second_variables)
+        self.second_resolver = FieldResolver(self.first_variables)
 
     def _first_or_second(self, sbom_format: Implementation) -> str:
         if sbom_format == self.first_format:
             return "first_"
         if sbom_format == self.second_format:
             return "second_"
+        raise ValueError(f"This map does not support format {sbom_format}!")
+
+    def _other(self, sbom_format: Implementation) -> Implementation:
+        if sbom_format == self.first_format:
+            return self.second_format
+        if sbom_format == self.second_format:
+            return self.first_format
         raise ValueError(f"This map does not support format {sbom_format}!")
 
     def data_for(self, sbom_format: Implementation) -> Data:
@@ -143,18 +131,16 @@ class Chunk:
     def resolver_for(self, sbom_format: Implementation) -> FieldResolver:
         return getattr(self, f"{self._first_or_second(sbom_format)}resolver")
 
-    def variables_for(self, sbom_format: Implementation) -> dict[str, Variable]:
-        return getattr(self, f"{self._first_or_second(sbom_format)}variables")
-
-    def occurrences(self, doc: Document) -> list[Any]:
-        resolver = self.resolver_for(doc.implementation)
-        return resolver.get_objects(doc.doc, self.field_path_for(doc.implementation))
+    def occurrences(self, doc: Document) -> list[str]:
+        resolver = self.resolver_for(self._other(doc.implementation))
+        return resolver.get_paths(doc.doc, self.field_path_for(doc.implementation), {})
 
     def convert_and_add(
         self,
         orig_doc: Document,
         new_doc: dict[str, Any],
     ) -> None:
+        """Mutates the new_doc with the occurrences of this chunk."""
         convert_from = orig_doc.implementation
         convert_to = (
             self.first_format
@@ -191,8 +177,6 @@ class TranslationMap:
     @staticmethod
     def from_file(file: str | Path) -> "TranslationMap":
         schema_dict = get_mapping(file)
-        print(schema_dict)
-        print(get_mapping(TRANSLATION_MAP_VALIDATION_SCHEMA_PATH))
         validate(schema_dict, get_mapping(TRANSLATION_MAP_VALIDATION_SCHEMA_PATH))
 
         first = Implementation(schema_dict["first"])
@@ -204,18 +188,20 @@ class TranslationMap:
 
         transformer_dir = get_path_to_var_transformers(file)
         first_transformer_file = None
-        for filename in ("first.py", f"{first}.py"):
+        for filename in ("first.py", f"{first.value}.py"):
             f = transformer_dir / filename
             if f.exists():
                 first_transformer_file = f
+                break
         first_glob_var_initialized = Variable.from_schema(
             first_glob_var, first_transformer_file
         )
         second_transformer_file = None
-        for filename in ("second.py", f"{second}.py"):
+        for filename in ("second.py", f"{second.value}.py"):
             f = transformer_dir / filename
             if f.exists():
                 second_transformer_file = f
+                break
         second_glob_var_initialized = Variable.from_schema(
             second_glob_var, second_transformer_file
         )
@@ -223,8 +209,7 @@ class TranslationMap:
         chunks = []
         for chunk_dict in schema_dict["chunks"]:
             name = chunk_dict["name"]
-            first_data = Data.from_schema_dict(chunk_dict["firstData"])
-            second_data = Data.from_schema_dict(chunk_dict["secondData"])
+
             first_field_path = chunk_dict.get("firstFieldPath")
             second_field_path = chunk_dict.get("secondFieldPath")
             first_variables = Variable.from_schema(
@@ -239,6 +224,10 @@ class TranslationMap:
 
             second_vars = {**second_glob_var_initialized}
             second_vars.update(second_variables)
+
+            first_data = Data(chunk_dict["firstData"], second_vars)
+            second_data = Data(chunk_dict["secondData"], first_vars)
+
             chunk = Chunk(
                 name,
                 first,

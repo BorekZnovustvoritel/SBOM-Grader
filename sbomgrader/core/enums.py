@@ -85,3 +85,4 @@ class QueryType(Enum):
     NEQ = "!="
     STARTSWITH = "%="
     ENDSWITH = "=%"
+    INDEX = ""

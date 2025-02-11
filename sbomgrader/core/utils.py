@@ -31,7 +31,7 @@ def get_path_to_implementations(schema_path: str | Path) -> Path:
 def get_path_to_var_transformers(schema_path: str | Path) -> Path:
     if isinstance(schema_path, str):
         schema_path = Path(schema_path)
-    return schema_path.parent / "transformers"
+    return schema_path.parent / "transformers" / schema_path.name.split(".", 1)[0]
 
 
 def validation_passed(validation_grade: Grade, minimal_grade: Grade) -> bool:

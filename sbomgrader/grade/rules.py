@@ -181,7 +181,7 @@ class RuleSet:
 
                 if not callable(func):
                     # load func according to name
-                    func = implementation_loaders[implementation_name].load_rule(
+                    func = implementation_loaders[implementation_name].load_func(
                         check_against
                     )
                 else:

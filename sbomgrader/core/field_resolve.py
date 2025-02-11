@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Union, Any, Callable
 
+from black.trans import defaultdict
+
 from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
     FIELD_NOT_PRESENT,
@@ -20,30 +22,42 @@ class PathParser:
     def __init__(self, path: str):
         self._path = path
         self.__next_is_query = False
-        self.ans: list[Union[str, QueryParser]] | None = None
+        self.ans: dict[str, list[Union[str, QueryParser]]] = defaultdict(list)
 
     def __create_field(
-        self, field: str, next_is_query: bool
+        self, field: str, next_is_query: bool, relative_path: str
     ) -> None:
         if self.__next_is_query:
-            next_ = QueryParser(field)
+            raw_field_path = field
+            if field.startswith("@"):
+                raw_field_path = field.replace("@", relative_path, 1)
+            next_ = QueryParser(raw_field_path)
         else:
             next_ = field.strip()
         self.__next_is_query = next_is_query
 
         if next_:
-            self.ans.append(next_)
+            self.ans[relative_path].append(next_)
 
-    def parse(self) -> list[Union[str, "QueryParser"]]:
-        if self.ans is not None:
-            return self.ans
-        self.ans = []
+    def parse(
+        self, relative_path: str | None = None
+    ) -> list[Union[str, "QueryParser"]]:
+        relative_path = relative_path or ""
+        if relative_path in self.ans:
+            return self.ans[relative_path]
+        resolve_path = self._path
+        if resolve_path.startswith("@"):
+            if not relative_path:
+                raise ValueError(
+                    "Cannot resolve relative path if no relative path is passed!"
+                )
+            resolve_path = resolve_path.replace("@", relative_path, 1)
         in_block = 1 if self.__next_is_query else 0
         buffer = ""
-        for char in self._path:
+        for char in resolve_path:
             if char == "[":
                 if not in_block:
-                    self.__create_field(buffer, True)
+                    self.__create_field(buffer, True, relative_path)
                     buffer = ""
                 else:
                     buffer += char
@@ -51,27 +65,27 @@ class PathParser:
             elif char == "]":
                 in_block -= 1
                 if not in_block:
-                    self.__create_field(buffer, False)
+                    self.__create_field(buffer, False, relative_path)
                     buffer = ""
                 else:
                     buffer += char
             elif char == ".":
                 if not in_block:
-                    self.__create_field(buffer, False)
+                    self.__create_field(buffer, False, relative_path)
                     buffer = ""
                 else:
                     buffer += char
             else:
                 buffer += char
         if buffer:
-            self.__create_field(buffer, False)
-        return self.ans
+            self.__create_field(buffer, False, relative_path)
+        return self.ans[relative_path]
 
 
 @dataclass
 class Query:
     type_: QueryType
-    value: str | None
+    value: str | int | None
     field_path: PathParser | None
 
     @property
@@ -83,6 +97,13 @@ class Query:
 class QueryParser:
     def __init__(self, path: str):
         self._path = path
+
+    def __eq__(self, other):
+        if not isinstance(other, QueryParser):
+            raise TypeError(
+                f"Cannot compare QueryParser to object of type {type(other)}"
+            )
+        return self._path == other._path
 
     def parse(self) -> list[Query]:
         queries = []
@@ -100,13 +121,16 @@ class QueryParser:
             elif after_operation and char != ",":
                 value_buffer += char
             elif char == "," and after_operation:
+                field_value = None if not value_buffer else value_buffer
+                if field_value and re.fullmatch(r"\d+", field_value):
+                    field_value = int(field_value)
                 queries.append(
                     Query(
                         type_=QueryType(operation_buffer),
                         field_path=(
                             None if not field_buffer else PathParser(field_buffer)
                         ),
-                        value=None if not value_buffer else value_buffer,
+                        value=field_value,
                     )
                 )
                 field_buffer = ""
@@ -146,11 +170,7 @@ class Variable:
         self.raw_field_path = field_path
         self.value_map = value_map
         self.transformer = transformer
-        full_parsed_path = PathParser(self.raw_field_path).parse()
-        self.is_relative: bool = full_parsed_path[0] == "@"
-        self.parsed_path: list[Union[str, QueryParser]] = (
-            full_parsed_path if not self.is_relative else full_parsed_path[1:]
-        )
+        self.path_parser = PathParser(self.raw_field_path)
 
     @staticmethod
     def from_schema(
@@ -173,9 +193,13 @@ class Variable:
                 )
             func_transform = None
             if func_transform_name:
-                func_transform = python_loader.functions[func_transform_name]
+                func_transform = python_loader.load_func(func_transform_name)
             ans[name] = Variable(name, field_path, transform_map, func_transform)
         return ans
+
+    @property
+    def is_relative(self) -> bool:
+        return self.raw_field_path.startswith("@.")
 
     def __hash__(self):
         return self.name.__hash__()
@@ -197,6 +221,8 @@ class VariableRef:
         However, we might want to include different data formats into the templates.
         To solve this, specifiers are introduced.
         """
+        if "unwrap" in self.specifiers:
+            base_value = next(iter(base_value), None)
         if "raw" in self.specifiers:
             ans = base_value
         elif variable_def.transformer:
@@ -205,10 +231,6 @@ class VariableRef:
             ans = [variable_def.value_map.get(b, b) for b in base_value]
         else:
             ans = base_value
-        if "unwrap" in self.specifiers or all(
-            not isinstance(stmt, QueryParser) for stmt in variable_def.parsed_path
-        ):
-            return next(iter(ans), None)
         return ans
 
 
@@ -224,10 +246,35 @@ class FieldResolver:
     def var_definitions(self) -> dict[str, Variable]:
         return self._uninitialized_vars
 
-    def resolve_variables(self, doc: dict[str, Any]) -> dict[str, list[Any]]:
+    @property
+    def absolute_variables(self) -> dict[str, Variable]:
+        return {
+            key: val
+            for key, val in self._uninitialized_vars.items()
+            if not val.is_relative
+        }
+
+    @property
+    def relative_variables(self) -> dict[str, Variable]:
+        return {
+            key: val for key, val in self._uninitialized_vars.items() if val.is_relative
+        }
+
+    def resolve_variables(
+        self, whole_doc: dict[str, Any], path_to_instance: str | None = None
+    ) -> dict[str, list[Any]]:
+        """
+        Resolve dependencies.
+        Without the argument `path_to_instance` this method cannot resolve relative variables
+        nor absolute variables relying on relative ones.
+        """
         # first resolve dependency tree for variables
         dependencies = {}
-        for variable in self._uninitialized_vars.values():
+        if path_to_instance:
+            vars_to_resolve = self._uninitialized_vars
+        else:
+            vars_to_resolve = self.absolute_variables
+        for variable in vars_to_resolve.values():
             dependencies[variable.name] = set()
             dependencies[variable.name].update(
                 VariableRef(match.group("var_id")).name
@@ -242,6 +289,12 @@ class FieldResolver:
             var_name, var_deps = sorted(dependencies.items(), key=lambda x: len(x[1]))[
                 0
             ]
+            if not path_to_instance and any(
+                self._uninitialized_vars[dep_name].is_relative for dep_name in var_deps
+            ):
+                # Cannot resolve absolute variable referencing a relative one
+                dependencies.pop(var_name)
+                continue
             assert (
                 not var_deps
             ), f"Circular variable reference found for variable {var_name}"
@@ -251,10 +304,10 @@ class FieldResolver:
             def add_to_variable(value: Any) -> None:
                 resolved_variables[var_name].append(value)
 
-            path = PathParser(self._uninitialized_vars[var_name].raw_field_path).parse()
+            path = vars_to_resolve[var_name].path_parser.parse(path_to_instance)
             try:
                 self._run_on_path(
-                    doc,
+                    whole_doc,
                     path,
                     resolved_variables,
                     "",
@@ -444,6 +497,23 @@ class FieldResolver:
                         create_nonexistent,
                     )
 
+    @staticmethod
+    def __parse_field_path(
+        field_path: str | list[Union[str, QueryParser]]
+    ) -> list[Union[str, QueryParser]]:
+        return (
+            field_path
+            if isinstance(field_path, list)
+            else PathParser(field_path).parse()
+        )
+
+    def __populate_variables(
+        self, doc: dict[str, Any], fallback_values: dict[str, Any]
+    ) -> dict[str, Any]:
+        variables = {} if not fallback_values else {**fallback_values}
+        variables.update(self.resolve_variables(doc))
+        return variables
+
     def run_func(
         self,
         doc: dict[str, Any],
@@ -453,28 +523,40 @@ class FieldResolver:
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
     ) -> Any:
-        variables = {} if not fallback_variables else {**fallback_variables}
-        variables.update(self.resolve_variables(doc))
-
         ran_on = set()
-        path = (
-            field_path
-            if isinstance(field_path, list)
-            else PathParser(field_path).parse()
-        )
+
         self._run_on_path(
             doc,
-            path,
-            variables,
+            self.__parse_field_path(field_path),
+            self.__populate_variables(doc, fallback_variables),
             "",
             func,
-            False,
+            create_nonexistent,
             ran_on,
             create_nonexistent,
         )
         assert (
             len(ran_on) >= minimal_runs
         ), "Test was not performed on any fields because no fields match given filters."
+
+    def get_paths(
+        self,
+        doc: dict[str, Any],
+        field_path: str | list[Union[str, QueryParser]],
+        fallback_variables: dict[str, Any],
+    ) -> list[str]:
+        paths = set()
+        self._run_on_path(
+            doc,
+            self.__parse_field_path(field_path),
+            self.__populate_variables(doc, fallback_variables),
+            "",
+            lambda _: None,
+            False,
+            paths,
+            False,
+        )
+        return list(paths)
 
     def get_objects(
         self,
@@ -505,13 +587,14 @@ class FieldResolver:
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
     ) -> list[Any]:
-        if isinstance(field_path, list):
-            parent_path = field_path[:-1]
-        else:
-            parent_path = PathParser(field_path).parse()[:-1]
-        return self.get_objects(
-            doc, parent_path, fallback_variables, create_nonexistent
-        )
+        path = self.__parse_field_path(field_path)
+        if create_nonexistent:
+            # create parents
+            self.get_objects(
+                doc, path, fallback_variables, create_nonexistent
+            )
+        # fetch parents
+        return self.get_objects(doc, path[:-1], fallback_variables, create_nonexistent)
 
     def insert_at_path(
         self,
