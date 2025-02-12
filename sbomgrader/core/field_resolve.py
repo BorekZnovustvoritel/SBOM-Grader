@@ -1,12 +1,10 @@
 import re
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Union, Any, Callable
 
 from black.trans import defaultdict
 
-from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
     FIELD_NOT_PRESENT,
     FieldNotPresentError,
@@ -163,38 +161,22 @@ class Variable:
         self,
         name: str,
         field_path: str,
-        value_map: dict[Any, Any] = None,
-        transformer: Callable[[Any], Any] = None,
     ):
         self.name = name
         self.raw_field_path = field_path
-        self.value_map = value_map
-        self.transformer = transformer
         self.path_parser = PathParser(self.raw_field_path)
 
     @staticmethod
     def from_schema(
-        schema_list: list[dict[str, Any]], transformer_file: Path = None
+        schema_list: list[dict[str, Any]]
     ) -> dict[str, "Variable"]:
         ans = {}
         if not schema_list:
             return ans
-        python_loader = None
-        if transformer_file:
-            python_loader = PythonLoader(transformer_file)
         for item in schema_list:
             name = item["name"]
             field_path = item["fieldPath"]
-            transform_map = item.get("map", {})
-            func_transform_name = item.get("funcTransform")
-            if (not python_loader) and func_transform_name:
-                raise ValueError(
-                    "Cannot load a transformer when its file is unspecified!"
-                )
-            func_transform = None
-            if func_transform_name:
-                func_transform = python_loader.load_func(func_transform_name)
-            ans[name] = Variable(name, field_path, transform_map, func_transform)
+            ans[name] = Variable(name, field_path)
         return ans
 
     @property
@@ -208,30 +190,10 @@ class Variable:
 class VariableRef:
     def __init__(self, identifier: str):
         self.original_identifier = identifier
-        identifier_parts = identifier.split(".")
-        self.name: str = identifier_parts[0]
-        self.specifiers: set[str] = set(identifier_parts[1:])
+        self.name: str = identifier
 
     def __hash__(self):
         return self.original_identifier.__hash__()
-
-    def resolve(self, base_value: list[Any], variable_def: Variable) -> Any:
-        """
-        Variable values are always returned in a list.
-        However, we might want to include different data formats into the templates.
-        To solve this, specifiers are introduced.
-        """
-        if "unwrap" in self.specifiers:
-            base_value = next(iter(base_value), None)
-        if "raw" in self.specifiers:
-            ans = base_value
-        elif variable_def.transformer:
-            ans = variable_def.transformer(base_value)
-        elif variable_def.value_map:
-            ans = [variable_def.value_map.get(b, b) for b in base_value]
-        else:
-            ans = base_value
-        return ans
 
 
 class FieldResolver:
@@ -261,7 +223,7 @@ class FieldResolver:
         }
 
     def resolve_variables(
-        self, whole_doc: dict[str, Any], path_to_instance: str | None = None
+        self, whole_doc: dict[str, Any], path_to_instance: str | None = None, warning_on: bool = True,
     ) -> dict[str, list[Any]]:
         """
         Resolve dependencies.
@@ -316,10 +278,11 @@ class FieldResolver:
                     set(),
                 )
             except Exception as e:
-                print(
-                    f"Could not parse variable {var_name}, problem: {str(e)}",
-                    file=sys.stderr,
-                )
+                if warning_on:
+                    print(
+                        f"Could not parse variable {var_name}, problem: {str(e)}",
+                        file=sys.stderr,
+                    )
 
             dependencies.pop(var_name)
             for dep in dependencies.values():
@@ -508,10 +471,12 @@ class FieldResolver:
         )
 
     def __populate_variables(
-        self, doc: dict[str, Any], fallback_values: dict[str, Any]
+        self, doc: dict[str, Any], fallback_values: dict[str, Any], allow_fail: bool = False,
     ) -> dict[str, Any]:
         variables = {} if not fallback_values else {**fallback_values}
-        variables.update(self.resolve_variables(doc))
+        resolved_vars = self.resolve_variables(doc, warning_on=not allow_fail)
+        resolved_vars = {k: [i for i in v if i and i is not FIELD_NOT_PRESENT] for k, v in resolved_vars.items() if v}
+        variables.update(resolved_vars)
         return variables
 
     def run_func(
@@ -528,7 +493,7 @@ class FieldResolver:
         self._run_on_path(
             doc,
             self.__parse_field_path(field_path),
-            self.__populate_variables(doc, fallback_variables),
+            self.__populate_variables(doc, fallback_variables, create_nonexistent),
             "",
             func,
             create_nonexistent,

@@ -1,86 +1,35 @@
-import re
-from copy import copy
 from pathlib import Path
 from typing import Any
 
+import yaml
 from jsonschema import validate
 
-from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
     TRANSLATION_MAP_VALIDATION_SCHEMA_PATH,
-    VAR_REF_REGEX,
 )
 from sbomgrader.core.documents import Document
 from sbomgrader.core.enums import Implementation
 from sbomgrader.core.field_resolve import (
     Variable,
     FieldResolver,
-    VariableRef,
 )
-from sbomgrader.core.utils import get_mapping, get_path_to_var_transformers
+from sbomgrader.core.utils import get_mapping, get_path_to_var_transformers, create_jinja_env
 
 
 class Data:
-    def __init__(self, template: Any, variables: dict[str, Variable]):
+    def __init__(self, template: str, variables: dict[str, Variable], transformer_path: Path | None = None):
         self.variables = variables
         self.template = template
         self.field_resolver = FieldResolver(variables)
+        self.transformer_path = transformer_path
+        self.jinja_env = create_jinja_env(self.transformer_path)
 
-    def _replace_string_with_vars(
-        self, string: str, variable_values: dict[str, list[Any]]
-    ) -> Any:
-        occurrences = re.findall(VAR_REF_REGEX, string)
-        if len(occurrences) == 1 and re.fullmatch(VAR_REF_REGEX, string):
-            # Interpret this variable as the whole object, don't inject it into a string
-            var_ref = VariableRef(occurrences[0])
-            return var_ref.resolve(
-                variable_values[var_ref.name], self.variables[var_ref.name]
-            )
-        new_string = f"{string}"
-        for occurrence in occurrences:
-            var_ref = VariableRef(occurrence)
-            new_string = new_string.replace(
-                "${" + occurrence + "}",
-                var_ref.resolve(
-                    variable_values[var_ref.name], self.variables[var_ref.name]
-                ),
-            )
-        return new_string
-
-    def _replace_vars(
-        self, item: Any, raw_variable_values: dict[str, list[Any]]
-    ) -> Any:
-        if isinstance(item, dict):
-            # Replace placeholders in string keys
-            dic = copy(item)
-            keys_to_change = {}
-            for key, value in dic.items():
-                if not isinstance(key, str):
-                    continue
-                new_key_val = str(
-                    self._replace_string_with_vars(key, raw_variable_values)
-                )
-                if new_key_val != key:
-                    keys_to_change[key] = new_key_val
-            for old_key, new_key in keys_to_change.items():
-                dic[new_key] = dic.pop(old_key)
-
-            # Run recursively in dict values
-            for key, val in dic.items():
-                dic[key] = self._replace_vars(val, raw_variable_values)
-            return dic
-
-        elif isinstance(item, list):
-            return [self._replace_vars(i, raw_variable_values) for i in item]
-        if isinstance(item, str):
-            return self._replace_string_with_vars(item, raw_variable_values)
-        return item
 
     def render(self, doc: Document, path_to_instance: str | None = None) -> Any:
         resolved_variables = self.field_resolver.resolve_variables(
             doc.doc, path_to_instance
         )
-        return self._replace_vars(self.template, resolved_variables)
+        return yaml.safe_load(self.jinja_env.from_string(self.template).render(**resolved_variables))
 
 
 class Chunk:
@@ -105,8 +54,8 @@ class Chunk:
         self.second_field_path = second_field_path
         self.first_variables = first_variables or {}
         self.second_variables = second_variables or {}
-        self.first_resolver = FieldResolver(self.second_variables)
-        self.second_resolver = FieldResolver(self.first_variables)
+        self.first_resolver = FieldResolver(self.first_variables)
+        self.second_resolver = FieldResolver(self.second_variables)
 
     def _first_or_second(self, sbom_format: Implementation) -> str:
         if sbom_format == self.first_format:
@@ -132,7 +81,7 @@ class Chunk:
         return getattr(self, f"{self._first_or_second(sbom_format)}resolver")
 
     def occurrences(self, doc: Document) -> list[str]:
-        resolver = self.resolver_for(self._other(doc.implementation))
+        resolver = self.resolver_for(doc.implementation)
         return resolver.get_paths(doc.doc, self.field_path_for(doc.implementation), {})
 
     def convert_and_add(
@@ -194,7 +143,7 @@ class TranslationMap:
                 first_transformer_file = f
                 break
         first_glob_var_initialized = Variable.from_schema(
-            first_glob_var, first_transformer_file
+            first_glob_var
         )
         second_transformer_file = None
         for filename in ("second.py", f"{second.value}.py"):
@@ -203,7 +152,7 @@ class TranslationMap:
                 second_transformer_file = f
                 break
         second_glob_var_initialized = Variable.from_schema(
-            second_glob_var, second_transformer_file
+            second_glob_var
         )
 
         chunks = []
@@ -213,10 +162,10 @@ class TranslationMap:
             first_field_path = chunk_dict.get("firstFieldPath")
             second_field_path = chunk_dict.get("secondFieldPath")
             first_variables = Variable.from_schema(
-                chunk_dict.get("firstVariables"), first_transformer_file
+                chunk_dict.get("firstVariables")
             )
             second_variables = Variable.from_schema(
-                chunk_dict.get("secondVariables"), second_transformer_file
+                chunk_dict.get("secondVariables")
             )
 
             first_vars = {**first_glob_var_initialized}
@@ -225,8 +174,8 @@ class TranslationMap:
             second_vars = {**second_glob_var_initialized}
             second_vars.update(second_variables)
 
-            first_data = Data(chunk_dict["firstData"], second_vars)
-            second_data = Data(chunk_dict["secondData"], first_vars)
+            first_data = Data(chunk_dict["firstData"], second_vars, second_transformer_file)
+            second_data = Data(chunk_dict["secondData"], first_vars, first_transformer_file)
 
             chunk = Chunk(
                 name,
@@ -253,7 +202,3 @@ class TranslationMap:
             chunk.convert_and_add(doc, new_data)
         return Document(new_data)
 
-
-class TransformerMapLoader(PythonLoader):
-    def __init__(self, *file_references: str | Path):
-        super().__init__(*file_references)

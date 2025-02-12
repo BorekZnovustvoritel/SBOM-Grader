@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
 
+import jinja2
 import yaml
 
+from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.enums import Grade
 
 
@@ -37,3 +39,13 @@ def get_path_to_var_transformers(schema_path: str | Path) -> Path:
 def validation_passed(validation_grade: Grade, minimal_grade: Grade) -> bool:
     # minimal is less than or equal to validation
     return Grade.compare(validation_grade, minimal_grade) < 1
+
+
+def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment:
+    env = jinja2.Environment()
+    env.filters["unwrap"] = lambda x: next(iter(x), None)
+    if transformer_file and transformer_file.exists():
+        python_loader = PythonLoader(transformer_file)
+        env.filters["func"] = lambda x, name: python_loader.load_func(name)(x)
+    return env
+

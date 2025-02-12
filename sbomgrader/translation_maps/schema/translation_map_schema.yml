@@ -57,7 +57,8 @@ required:
   - chunks
 $defs:
   data:
-    description: Data to be inserted. Can reference variables.
+    description: Data to be inserted. It is a Jinja2 template.
+    type: string
   variables:
     type: array
     items:
@@ -67,12 +68,6 @@ $defs:
           type: string
         fieldPath:
           type: string
-        map:
-          description: Transform known values with a map.
-          type: object
-        funcTransform:
-          type: string
-          description: Transform data with a Python function.
       required:
         - name
         - fieldPath
