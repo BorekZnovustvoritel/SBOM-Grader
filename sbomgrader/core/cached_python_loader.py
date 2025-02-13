@@ -40,5 +40,8 @@ class PythonLoader:
         if self._unloaded_file_references:
             self._load_all_references()
         if name not in self.__functions:
-            print(f"Could not load transformer {name} from files {self.file_references}.", file=sys.stderr)
+            print(
+                f"Could not load transformer {name} from files {self.file_references}.",
+                file=sys.stderr,
+            )
         return self.__functions.get(name, None)

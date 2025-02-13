@@ -12,7 +12,7 @@ properties:
     type: string
     description: Second SBOM format.
   variables:
-    description: Global variables, populated from the original data, used for resolution in the original data.
+    description: Global variables, populated from the original data.
     type: object
     properties:
       first:

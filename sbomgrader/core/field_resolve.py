@@ -119,16 +119,13 @@ class QueryParser:
             elif after_operation and char != ",":
                 value_buffer += char
             elif char == "," and after_operation:
-                field_value = None if not value_buffer else value_buffer
-                if field_value and re.fullmatch(r"\d+", field_value):
-                    field_value = int(field_value)
                 queries.append(
                     Query(
                         type_=QueryType(operation_buffer),
                         field_path=(
                             None if not field_buffer else PathParser(field_buffer)
                         ),
-                        value=field_value,
+                        value=None if not value_buffer else value_buffer,
                     )
                 )
                 field_buffer = ""
@@ -146,13 +143,21 @@ class QueryParser:
                 field_buffer += char.strip()
 
         if field_buffer or operation_buffer or value_buffer:
-            queries.append(
-                Query(
+            if (
+                (m := re.fullmatch(r"\d+", field_buffer))
+                and not operation_buffer
+                and not value_buffer
+            ):
+                query = Query(
+                    type_=QueryType.INDEX, field_path=None, value=int(m.group())
+                )
+            else:
+                query = Query(
                     type_=QueryType(operation_buffer.strip()),
                     field_path=PathParser(field_buffer.strip()),
                     value=value_buffer.strip(),
                 )
-            )
+            queries.append(query)
         return queries
 
 
@@ -167,9 +172,7 @@ class Variable:
         self.path_parser = PathParser(self.raw_field_path)
 
     @staticmethod
-    def from_schema(
-        schema_list: list[dict[str, Any]]
-    ) -> dict[str, "Variable"]:
+    def from_schema(schema_list: list[dict[str, Any]]) -> dict[str, "Variable"]:
         ans = {}
         if not schema_list:
             return ans
@@ -185,6 +188,9 @@ class Variable:
 
     def __hash__(self):
         return self.name.__hash__()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}, name: {self.name}, field_path: {self.raw_field_path}>"
 
 
 class VariableRef:
@@ -223,7 +229,10 @@ class FieldResolver:
         }
 
     def resolve_variables(
-        self, whole_doc: dict[str, Any], path_to_instance: str | None = None, warning_on: bool = True,
+        self,
+        whole_doc: dict[str, Any],
+        path_to_instance: str | None = None,
+        warning_on: bool = True,
     ) -> dict[str, list[Any]]:
         """
         Resolve dependencies.
@@ -320,7 +329,7 @@ class FieldResolver:
                     f"Check did not pass for item: {item_str} at path: {path_tried}\n"
                     + "\n".join(str(m) for m in e.args)
                 )
-                raise type(e)(message_to_return)
+                raise type(e)(message_to_return) from e
             return
         step = path[0]
         if isinstance(step, str):
@@ -377,6 +386,9 @@ class FieldResolver:
                     if query.type_ is QueryType.ANY:
                         can_fail_for_some = True
                     continue
+                elif query.type_ is QueryType.INDEX:
+                    to_use.append({query.value})
+                    continue
                 # Actually filter the list
                 to_use_in_query = set()
                 for idx, item in enumerate(doc_):
@@ -412,9 +424,12 @@ class FieldResolver:
                     final_func = lambda x: (
                         to_use_in_query.add(idx) if func(x) else None
                     )
+                    parsed_path = (
+                        query.field_path.parse() if query.field_path is not None else []
+                    )
                     self._run_on_path(
                         item,
-                        query.field_path.parse(),
+                        parsed_path,
                         variable_values,
                         path_tried + f"[{idx}]",
                         final_func,
@@ -471,11 +486,18 @@ class FieldResolver:
         )
 
     def __populate_variables(
-        self, doc: dict[str, Any], fallback_values: dict[str, Any], allow_fail: bool = False,
+        self,
+        doc: dict[str, Any],
+        fallback_values: dict[str, Any],
+        allow_fail: bool = False,
     ) -> dict[str, Any]:
         variables = {} if not fallback_values else {**fallback_values}
         resolved_vars = self.resolve_variables(doc, warning_on=not allow_fail)
-        resolved_vars = {k: [i for i in v if i and i is not FIELD_NOT_PRESENT] for k, v in resolved_vars.items() if v}
+        resolved_vars = {
+            k: [i for i in v if i and i is not FIELD_NOT_PRESENT]
+            for k, v in resolved_vars.items()
+            if v
+        }
         variables.update(resolved_vars)
         return variables
 
@@ -555,9 +577,7 @@ class FieldResolver:
         path = self.__parse_field_path(field_path)
         if create_nonexistent:
             # create parents
-            self.get_objects(
-                doc, path, fallback_variables, create_nonexistent
-            )
+            self.get_objects(doc, path, fallback_variables, create_nonexistent)
         # fetch parents
         return self.get_objects(doc, path[:-1], fallback_variables, create_nonexistent)
 

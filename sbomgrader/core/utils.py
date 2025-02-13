@@ -48,4 +48,3 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
         python_loader = PythonLoader(transformer_file)
         env.filters["func"] = lambda x, name: python_loader.load_func(name)(x)
     return env
-

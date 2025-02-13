@@ -13,23 +13,33 @@ from sbomgrader.core.field_resolve import (
     Variable,
     FieldResolver,
 )
-from sbomgrader.core.utils import get_mapping, get_path_to_var_transformers, create_jinja_env
+from sbomgrader.core.utils import (
+    get_mapping,
+    get_path_to_var_transformers,
+    create_jinja_env,
+)
 
 
 class Data:
-    def __init__(self, template: str, variables: dict[str, Variable], transformer_path: Path | None = None):
+    def __init__(
+        self,
+        template: str,
+        variables: dict[str, Variable],
+        transformer_path: Path | None = None,
+    ):
         self.variables = variables
         self.template = template
         self.field_resolver = FieldResolver(variables)
         self.transformer_path = transformer_path
         self.jinja_env = create_jinja_env(self.transformer_path)
 
-
     def render(self, doc: Document, path_to_instance: str | None = None) -> Any:
         resolved_variables = self.field_resolver.resolve_variables(
             doc.doc, path_to_instance
         )
-        return yaml.safe_load(self.jinja_env.from_string(self.template).render(**resolved_variables))
+        return yaml.safe_load(
+            self.jinja_env.from_string(self.template).render(**resolved_variables)
+        )
 
 
 class Chunk:
@@ -142,18 +152,14 @@ class TranslationMap:
             if f.exists():
                 first_transformer_file = f
                 break
-        first_glob_var_initialized = Variable.from_schema(
-            first_glob_var
-        )
+        first_glob_var_initialized = Variable.from_schema(first_glob_var)
         second_transformer_file = None
         for filename in ("second.py", f"{second.value}.py"):
             f = transformer_dir / filename
             if f.exists():
                 second_transformer_file = f
                 break
-        second_glob_var_initialized = Variable.from_schema(
-            second_glob_var
-        )
+        second_glob_var_initialized = Variable.from_schema(second_glob_var)
 
         chunks = []
         for chunk_dict in schema_dict["chunks"]:
@@ -161,12 +167,8 @@ class TranslationMap:
 
             first_field_path = chunk_dict.get("firstFieldPath")
             second_field_path = chunk_dict.get("secondFieldPath")
-            first_variables = Variable.from_schema(
-                chunk_dict.get("firstVariables")
-            )
-            second_variables = Variable.from_schema(
-                chunk_dict.get("secondVariables")
-            )
+            first_variables = Variable.from_schema(chunk_dict.get("firstVariables"))
+            second_variables = Variable.from_schema(chunk_dict.get("secondVariables"))
 
             first_vars = {**first_glob_var_initialized}
             first_vars.update(first_variables)
@@ -174,8 +176,12 @@ class TranslationMap:
             second_vars = {**second_glob_var_initialized}
             second_vars.update(second_variables)
 
-            first_data = Data(chunk_dict["firstData"], second_vars, second_transformer_file)
-            second_data = Data(chunk_dict["secondData"], first_vars, first_transformer_file)
+            first_data = Data(
+                chunk_dict["firstData"], second_vars, second_transformer_file
+            )
+            second_data = Data(
+                chunk_dict["secondData"], first_vars, first_transformer_file
+            )
 
             chunk = Chunk(
                 name,
@@ -201,4 +207,3 @@ class TranslationMap:
         for chunk in self.chunks:
             chunk.convert_and_add(doc, new_data)
         return Document(new_data)
-
