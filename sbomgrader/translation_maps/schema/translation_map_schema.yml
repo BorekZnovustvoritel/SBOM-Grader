@@ -11,16 +11,10 @@ properties:
   second:
     type: string
     description: Second SBOM format.
-  variables:
-    description: Global variables, populated from the original data.
-    type: object
-    properties:
-      first:
-        $ref: "#/$defs/variables"
-      second:
-        $ref: "#/$defs/variables"
-    additionalProperties: false
-
+  firstVariables:
+    $ref: "#/$defs/variables"
+  secondVariables:
+    $ref: "#/$defs/variables"
   chunks:
     type: array
     items:
@@ -51,6 +45,7 @@ properties:
         - firstFieldPath
         - secondFieldPath
       additionalProperties: false
+additionalProperties: false
 required:
   - first
   - second

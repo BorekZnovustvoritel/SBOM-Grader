@@ -1,13 +1,12 @@
 ---
 first: spdx23
 second: cdx16
-variables:
-  first:
-    - name: main_element_spdxid
-      fieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]relatedSpdxElement
-  second:
-    - name: main_element_name
-      fieldPath: metadata.component.name
+firstVariables:
+  - name: main_element_spdxid
+    fieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]relatedSpdxElement
+secondVariables:
+  - name: main_element_name
+    fieldPath: metadata.component.name
 chunks:
   - name: Skeleton
     firstData: |-

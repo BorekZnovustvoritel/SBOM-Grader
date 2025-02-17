@@ -141,9 +141,8 @@ class TranslationMap:
         first = Implementation(schema_dict["first"])
         second = Implementation(schema_dict["second"])
 
-        global_variable_def = schema_dict.get("variables", {})
-        first_glob_var = global_variable_def.get("first")
-        second_glob_var = global_variable_def.get("second")
+        first_glob_var = schema_dict.get("firstVariables")
+        second_glob_var = schema_dict.get("secondVariables")
 
         transformer_dir = get_path_to_var_transformers(file)
         first_transformer_file = None
