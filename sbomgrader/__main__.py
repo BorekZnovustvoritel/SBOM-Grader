@@ -5,14 +5,18 @@ from pathlib import Path
 from rich.console import Console
 from rich.markdown import Markdown
 
+from sbomgrader.core.formats import SBOMFormat
+from sbomgrader.grade.choose_cookbooks import select_cookbook_bundle
 from sbomgrader.grade.cookbook_bundles import CookbookBundle
 from sbomgrader.grade.cookbooks import Cookbook
 from sbomgrader.core.documents import Document
 from sbomgrader.core.enums import Grade, SBOMTime, OutputType, SBOMType
 from sbomgrader.core.utils import get_mapping, validation_passed
+from sbomgrader.translate.choose_map import choose_map, get_all_map_list_markdown
+from sbomgrader.translate.translation_map import TranslationMap
 
 
-def main():
+def grade():
     parser = ArgumentParser("sbomgrader")
     parser.add_argument(
         "input",
@@ -80,34 +84,8 @@ def main():
         exit(1)
     doc = Document(get_mapping(sbom_file))
 
-    cookbook_bundles = []
     if args.cookbooks:
-        cookbook_bundle = CookbookBundle([])
-        for cookbook in args.cookbooks:
-            cookbook_obj = next(
-                filter(lambda x: x.name == cookbook, default_cookbooks), None
-            )
-            if cookbook_obj:
-                # It's a default cookbook name
-                cookbook_bundle += cookbook_obj
-                continue
-            cookbook = Path(cookbook)
-            if cookbook.is_dir():
-                cookbook_bundle += CookbookBundle.from_directory(cookbook)
-                if not cookbook_bundle.cookbooks:
-                    print(
-                        f"Could not find any cookbooks in directory {cookbook.absolute()}",
-                        file=sys.stderr,
-                    )
-            elif cookbook.is_file() and (
-                cookbook.name.endswith(".yml") or cookbook.name.endswith(".yaml")
-            ):
-                cookbook_bundles.append(CookbookBundle([Cookbook.from_file(cookbook)]))
-            else:
-                print(f"Could not find cookbook {cookbook.absolute()}", file=sys.stderr)
-
-        for cb in cookbook_bundles:
-            cookbook_bundle += cb
+        cookbook_bundle = select_cookbook_bundle(args.cookbooks)
         if not cookbook_bundle.cookbooks:
             print("No cookbook(s) could be found.", file=sys.stderr)
             exit(1)
@@ -133,5 +111,52 @@ def main():
     exit(1)
 
 
+def convert():
+    parser = ArgumentParser("sbomconv")
+    parser.add_argument(
+        "input",
+        type=Path,
+        help="SBOM File to convert. Currently supports JSON.",
+        nargs="?",
+    )
+    parser.add_argument(
+        "--list-maps",
+        "-l",
+        action="store_true",
+        default=False,
+        help="List available default translation maps and exit.",
+    )
+    parser.add_argument(
+        "--output-format",
+        "-f",
+        choices=[v.value for v in SBOMFormat],
+        required=not ("--list-maps" in sys.argv or "-l" in sys.argv),
+        help="",
+    )
+    parser.add_argument(
+        "--custom-map", "-m", type=Path, help="Custom translation map file.", nargs="*"
+    )
+    args = parser.parse_args()
+
+    custom_map_files = args.custom_map or []
+    custom_maps = [TranslationMap.from_file(f) for f in custom_map_files]
+
+    if args.list_maps:
+        console = Console()
+        console.print(Markdown(get_all_map_list_markdown(*custom_maps)))
+        exit(0)
+    inp_file = args.input
+    if not inp_file:
+        print("Please supply an SBOM file.", file=sys.stderr)
+        parser.print_help(sys.stderr)
+        exit(1)
+    doc = Document(get_mapping(inp_file))
+
+    target_format = SBOMFormat(args.output_format)
+
+    t_map = choose_map(doc, target_format, *custom_maps)
+    print(t_map.convert(doc, target_format).json_dump)
+
+
 if __name__ == "__main__":
-    main()
+    grade()

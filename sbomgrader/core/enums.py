@@ -1,12 +1,6 @@
 from enum import Enum
 
 
-class Implementation(Enum):
-    SPDX23 = "spdx23"
-    CYCLONEDX15 = "cdx15"
-    CYCLONEDX16 = "cdx16"
-
-
 class ResultType(Enum):
     SUCCESS = "success"
     NOT_PRESENT = "not present"

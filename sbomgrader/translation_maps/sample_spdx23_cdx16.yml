@@ -1,0 +1,15 @@
+---
+first: spdx23
+second: cdx16
+chunks:
+  - name: Skeleton
+    firstData: |-
+      spdxVersion: "SPDX-2.3"
+      dataLicense: "CC0-1.0"
+      SPDXID: "SPDXRef-DOCUMENT"
+    firstFieldPath: .
+    secondData: |-
+      bomFormat: "CycloneDX"
+      specVersion: "1.6"
+      version: 1
+    secondFieldPath: .

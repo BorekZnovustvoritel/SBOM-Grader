@@ -1,0 +1,30 @@
+---
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'https://redhat.com/sbomgrader/ruleschema.json'
+title: Implementation schema
+description: A schema for describing implementations of SBOM.
+type: object
+properties:
+  formats:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        expectedStructure:
+          type: object
+        fallback:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+      required:
+        - name
+        - value
+        - expectedStructure
+additionalProperties: false
+required:
+  - formats

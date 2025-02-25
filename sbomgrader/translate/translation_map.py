@@ -2,16 +2,19 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jsonschema import validate
 
 from sbomgrader.core.definitions import (
     TRANSLATION_MAP_VALIDATION_SCHEMA_PATH,
 )
 from sbomgrader.core.documents import Document
-from sbomgrader.core.enums import Implementation
 from sbomgrader.core.field_resolve import (
     Variable,
     FieldResolver,
+)
+from sbomgrader.core.formats import (
+    SBOMFormat,
+    get_fallbacks,
+    SBOM_FORMAT_DEFINITION_MAPPING,
 )
 from sbomgrader.core.utils import (
     get_mapping,
@@ -46,8 +49,8 @@ class Chunk:
     def __init__(
         self,
         name: str,
-        first_format: Implementation,
-        second_format: Implementation,
+        first_format: SBOMFormat,
+        second_format: SBOMFormat,
         first_data: Data,
         second_data: Data,
         first_field_path: str,
@@ -67,32 +70,36 @@ class Chunk:
         self.first_resolver = FieldResolver(self.first_variables)
         self.second_resolver = FieldResolver(self.second_variables)
 
-    def _first_or_second(self, sbom_format: Implementation) -> str:
-        if sbom_format == self.first_format:
+    def _first_or_second(self, sbom_format: SBOMFormat) -> str:
+        if sbom_format == self.first_format or self.first_format in get_fallbacks(
+            sbom_format
+        ):
             return "first_"
-        if sbom_format == self.second_format:
+        if sbom_format == self.second_format or self.second_format in get_fallbacks(
+            sbom_format
+        ):
             return "second_"
         raise ValueError(f"This map does not support format {sbom_format}!")
 
-    def _other(self, sbom_format: Implementation) -> Implementation:
+    def _other(self, sbom_format: SBOMFormat) -> SBOMFormat:
         if sbom_format == self.first_format:
             return self.second_format
         if sbom_format == self.second_format:
             return self.first_format
         raise ValueError(f"This map does not support format {sbom_format}!")
 
-    def data_for(self, sbom_format: Implementation) -> Data:
+    def data_for(self, sbom_format: SBOMFormat) -> Data:
         return getattr(self, f"{self._first_or_second(sbom_format)}data")
 
-    def field_path_for(self, sbom_format: Implementation) -> str | None:
+    def field_path_for(self, sbom_format: SBOMFormat) -> str | None:
         return getattr(self, f"{self._first_or_second(sbom_format)}field_path")
 
-    def resolver_for(self, sbom_format: Implementation) -> FieldResolver:
+    def resolver_for(self, sbom_format: SBOMFormat) -> FieldResolver:
         return getattr(self, f"{self._first_or_second(sbom_format)}resolver")
 
     def occurrences(self, doc: Document) -> list[str]:
-        resolver = self.resolver_for(doc.implementation)
-        return resolver.get_paths(doc.doc, self.field_path_for(doc.implementation), {})
+        resolver = self.resolver_for(doc.sbom_format)
+        return resolver.get_paths(doc.doc, self.field_path_for(doc.sbom_format), {})
 
     def convert_and_add(
         self,
@@ -100,7 +107,13 @@ class Chunk:
         new_doc: dict[str, Any],
     ) -> None:
         """Mutates the new_doc with the occurrences of this chunk."""
-        convert_from = orig_doc.implementation
+        convert_from = orig_doc.sbom_format
+        if convert_from not in {self.first_format, self.second_format}:
+            fallbacks = get_fallbacks(orig_doc.sbom_format)
+            if self.first_format in fallbacks:
+                convert_from = self.first_format
+            elif self.second_format in fallbacks:
+                convert_from = self.second_format
         convert_to = (
             self.first_format
             if self.first_format != convert_from
@@ -119,8 +132,8 @@ class Chunk:
 class TranslationMap:
     def __init__(
         self,
-        first: Implementation,
-        second: Implementation,
+        first: SBOMFormat,
+        second: SBOMFormat,
         chunks: list[Chunk],
         first_variables: dict[str, Variable] = None,
         second_variables: dict[str, Variable] = None,
@@ -133,13 +146,20 @@ class TranslationMap:
         self.first_resolver = FieldResolver(first_variables)
         self.second_resolver = FieldResolver(second_variables)
 
+    @property
+    def first_with_fallbacks(self) -> set[SBOMFormat]:
+        return {self.first, *get_fallbacks(self.first)}
+
+    @property
+    def second_with_fallbacks(self) -> set[SBOMFormat]:
+        return {self.second, *get_fallbacks(self.second)}
+
     @staticmethod
     def from_file(file: str | Path) -> "TranslationMap":
-        schema_dict = get_mapping(file)
-        validate(schema_dict, get_mapping(TRANSLATION_MAP_VALIDATION_SCHEMA_PATH))
+        schema_dict = get_mapping(file, TRANSLATION_MAP_VALIDATION_SCHEMA_PATH)
 
-        first = Implementation(schema_dict["first"])
-        second = Implementation(schema_dict["second"])
+        first = SBOMFormat(schema_dict["first"])
+        second = SBOMFormat(schema_dict["second"])
 
         first_glob_var = schema_dict.get("firstVariables")
         second_glob_var = schema_dict.get("secondVariables")
@@ -196,13 +216,42 @@ class TranslationMap:
             chunks.append(chunk)
         return TranslationMap(first, second, chunks)
 
-    def convert(self, doc: Document) -> Document:
+    def convert(
+        self, doc: Document, override_format: SBOMFormat | None = None
+    ) -> Document:
+        """Converts document to a format"""
         new_data = {}
-        convert_from = doc.implementation
-        assert convert_from in {
+        assert doc.sbom_format in (
             self.first,
             self.second,
-        }, f"This map cannot convert from {doc.implementation}."
+        ) or any(
+            fallback
+            in (
+                self.first,
+                self.second,
+            )
+            for fallback in doc.sbom_format_fallback
+        ), f"This map cannot convert from {doc.sbom_format}."
         for chunk in self.chunks:
             chunk.convert_and_add(doc, new_data)
+        if override_format is not None:
+            new_data.update(SBOM_FORMAT_DEFINITION_MAPPING[override_format])
         return Document(new_data)
+
+    def is_exact_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if this map converts between these two formats."""
+        return ((from_ is self.first) and (to is self.second)) or (
+            (from_ is self.second) and (to is self.first)
+        )
+
+    def is_suitable_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if the map is able to convert between formats including fallbacks."""
+        if self.is_exact_map(from_, to):
+            return True
+        from_fallbacks = get_fallbacks(from_)
+        from_fallbacks.add(from_)
+        to_fallbacks = get_fallbacks(to)
+        to_fallbacks.add(to)
+        return (self.first in from_fallbacks and self.second in to_fallbacks) or (
+            self.first in to_fallbacks and self.second in from_fallbacks
+        )

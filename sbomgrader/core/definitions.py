@@ -2,7 +2,6 @@ import re
 from pathlib import Path
 from typing import Sized
 
-from sbomgrader.core.enums import Implementation
 
 ROOT_DIR: Path = Path(__file__).parent.parent
 RULESET_DIR = ROOT_DIR / "rulesets"
@@ -12,16 +11,14 @@ RULESET_VALIDATION_SCHEMA_PATH = ROOT_DIR / "rulesets" / "schema" / "rule_schema
 COOKBOOK_VALIDATION_SCHEMA_PATH = (
     ROOT_DIR / "cookbooks" / "schema" / "cookbook_schema.yml"
 )
+TRANSLATION_MAP_DIR = ROOT_DIR / "translation_maps"
 TRANSLATION_MAP_VALIDATION_SCHEMA_PATH = (
-    ROOT_DIR / "translation_maps" / "schema" / "translation_map_schema.yml"
+    TRANSLATION_MAP_DIR / "schema" / "translation_map_schema.yml"
 )
+FORMAT_FILE_PATH = ROOT_DIR / "formats" / "formats.yml"
+FORMAT_VALIDATION_SCHEMA_PATH = ROOT_DIR / "formats" / "schema" / "formats_schema.yml"
 COOKBOOK_EXTENSIONS = {".yml", ".yaml"}
 
-SBOM_FORMAT_DEFINITION_MAPPING = {
-    Implementation.SPDX23: {"spdxVersion": "SPDX-2.3"},
-    Implementation.CYCLONEDX15: {"bomFormat": "CycloneDX", "specVersion": "1.5"},
-    Implementation.CYCLONEDX16: {"bomFormat": "CycloneDX", "specVersion": "1.6"},
-}
 MAX_ITEM_PREVIEW_LENGTH = 50
 START_PREVIEW_CHARS = 25
 END_PREVIEW_CHARS = 20
