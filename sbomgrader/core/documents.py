@@ -1,6 +1,5 @@
-from copy import copy
 from functools import cached_property
-from typing import Any, Iterable
+from typing import Any
 
 from sbomgrader.core.definitions import SBOM_FORMAT_DEFINITION_MAPPING
 from sbomgrader.core.enums import SBOMType, Implementation

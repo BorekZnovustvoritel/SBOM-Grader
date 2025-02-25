@@ -4,8 +4,8 @@ import pytest
 
 from sbomgrader.core.definitions import COOKBOOKS_DIR
 from sbomgrader.core.utils import get_mapping
-from sbomgrader.core.cookbooks import Cookbook
-from sbomgrader.core.rules import Document
+from sbomgrader.grade.cookbooks import Cookbook
+from sbomgrader.grade.rules import Document
 
 
 @pytest.fixture()

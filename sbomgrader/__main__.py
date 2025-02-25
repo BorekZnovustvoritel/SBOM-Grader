@@ -5,8 +5,8 @@ from pathlib import Path
 from rich.console import Console
 from rich.markdown import Markdown
 
-from sbomgrader.core.cookbook_bundles import CookbookBundle
-from sbomgrader.core.cookbooks import Cookbook
+from sbomgrader.grade.cookbook_bundles import CookbookBundle
+from sbomgrader.grade.cookbooks import Cookbook
 from sbomgrader.core.documents import Document
 from sbomgrader.core.enums import Grade, SBOMTime, OutputType, SBOMType
 from sbomgrader.core.utils import get_mapping, validation_passed
