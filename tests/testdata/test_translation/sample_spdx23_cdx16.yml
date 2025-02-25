@@ -1,0 +1,68 @@
+---
+first: spdx23
+second: cdx16
+firstVariables:
+  - name: main_element_spdxid
+    fieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]relatedSpdxElement
+secondVariables:
+  - name: main_element_name
+    fieldPath: metadata.component.name
+chunks:
+  - name: Skeleton
+    firstData: |-
+      spdxVersion: "SPDX-2.3"
+      dataLicense: "CC0-1.0"
+      SPDXID: "SPDXRef-DOCUMENT"
+    firstFieldPath: .
+    secondData: |-
+      bomFormat: "CycloneDX"
+      specVersion: "1.6"
+      version: 1
+    secondFieldPath: .
+  - name: Main Component Identifier
+    firstFieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]
+    firstData: |-
+      spdxElementId: SPDXRef-DOCUMENT
+      relationshipType: DESCRIBES
+      relatedSpdxElement: "SPDXRef-{{ main_element_name | unwrap | func(name="name_to_spdxid") }}"
+    secondFieldPath: metadata.component.name
+    secondData: |-
+      {{ main_element_spdxid | unwrap | func(name="spdxid_to_name") }}
+  - name: Main Component
+    firstVariables:
+      - name: purls
+        fieldPath: '@.externalRefs[referenceType=purl]referenceLocator'
+      - name: sha256s
+        fieldPath: '@.checksums[algorithm=SHA256]checksumValue'
+      - name: element_name
+        fieldPath: '@.name'
+    secondVariables:
+      - name: purls
+        fieldPath: '@.purl'
+      - name: sha256s
+        fieldPath: '@.hashes[alg=SHA-256]content'
+    firstFieldPath: packages[SPDXID=${main_element_spdxid}]
+    firstData: |-
+      SPDXID: "SPDXRef-{{ main_element_name | unwrap | func(name="name_to_spdxid")}}"
+      name: "{{ main_element_name | unwrap }}"
+      externalRefs:
+      {% for purl in purls %}
+        - referenceCategory: "PACKAGE-MANAGER"
+          referenceType: "purl"
+          referenceLocator: "{{ purl }}"
+      {% endfor %}
+      checksums:
+      {% for hash in sha256s %}
+        - algorithm: "SHA256"
+          checksumValue: "{{ hash }}"
+      {% endfor %}
+    secondFieldPath: components[name=${main_element_name}]
+    secondData: |-
+      type: "sample"
+      name: "{{ element_name | unwrap }}"
+      purl: "{{ purls | unwrap }}"
+      hashes:
+      {% for hash in sha256s %}
+        - alg: "SHA-256"
+          content: "{{ hash }}"
+      {% endfor %}

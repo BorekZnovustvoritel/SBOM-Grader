@@ -17,7 +17,7 @@ from sbomgrader.core.definitions import (
     COOKBOOKS_DIR,
     COOKBOOK_EXTENSIONS,
 )
-from sbomgrader.core.rules import RuleSet, Document, Result, ResultDetail
+from sbomgrader.grade.rules import RuleSet, Document, Result, ResultDetail
 
 
 @dataclass

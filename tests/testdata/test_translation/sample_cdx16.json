@@ -1,0 +1,23 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "name": "image index"
+    }
+  },
+  "components": [
+    {
+      "type": "sample",
+      "name": "image index",
+      "purl": "foo",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "bar"
+        }
+      ]
+    }
+  ]
+}

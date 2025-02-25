@@ -1,0 +1,70 @@
+---
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'https://redhat.com/sbomgrader/translation_map_schema.yml'
+title: Translation Map Schema
+description: Schema to validate SBOM Translation Maps.
+type: object
+properties:
+  first:
+    type: string
+    description: First SBOM format.
+  second:
+    type: string
+    description: Second SBOM format.
+  firstVariables:
+    $ref: "#/$defs/variables"
+  secondVariables:
+    $ref: "#/$defs/variables"
+  chunks:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        firstVariables:
+          $ref: "#/$defs/variables"
+        secondVariables:
+          $ref: "#/$defs/variables"
+        firstData:
+          $ref: "#/$defs/data"
+          description: Data to populate in the first SBOM type.
+        firstFieldPath:
+          type: string
+          description: Path to data in the first SBOM type.
+        secondData:
+          $ref: "#/$defs/data"
+          description: Data to populate in the second SBOM type.
+        secondFieldPath:
+          type: string
+          description: Path to data in the second SBOM type.
+      required:
+        - name
+        - firstData
+        - secondData
+        - firstFieldPath
+        - secondFieldPath
+      additionalProperties: false
+additionalProperties: false
+required:
+  - first
+  - second
+  - chunks
+$defs:
+  data:
+    description: Data to be inserted. It is a Jinja2 template.
+    type: string
+  variables:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        fieldPath:
+          type: string
+      required:
+        - name
+        - fieldPath
+      additionalProperties: false
+    description: Variables are populated from the other format.
