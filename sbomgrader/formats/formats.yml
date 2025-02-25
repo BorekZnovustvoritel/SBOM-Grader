@@ -17,6 +17,8 @@ formats:
     expectedStructure:
       bomFormat: CycloneDX
       specVersion: "1.6"
+    fallback:
+      - CYCLONEDX15
   - name: CYCLONEDX15
     value: cdx15
     expectedStructure:

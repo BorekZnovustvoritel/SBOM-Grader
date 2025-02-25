@@ -29,3 +29,7 @@ that the SBOM is in this standard.
 
 Optional field, specifies which format will serve as a fallback
 if this exact format has no implementation.
+
+For example, if a translation map exists for SPDX v2.3, and we
+provide SBOM of format SPDX v2.2, we should define that these
+formats can fall back to each other (mutually).
