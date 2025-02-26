@@ -38,7 +38,7 @@ class GradeConfig:
     def from_args(args: Namespace) -> "GradeConfig":
         return GradeConfig(
             input_file=args.input,
-            cookbook_references=args.cookbooks,
+            cookbook_references=args.cookbook,
             content_type=args.content_type,
             sbom_type=args.sbom_type,
             passing_grade=args.passing_grade,
@@ -53,12 +53,12 @@ def create_grade_parser(parser: ArgumentParser):
         help="SBOM File to grade. Currently supports JSON.",
     )
     parser.add_argument(
-        "--cookbooks",
+        "--cookbook",
         "-c",
         action="append",
         type=str,
         help="Cookbooks to use for validation. "
-        "Might reference default cookbooks, directories or files. "
+        "Might reference default cookbook, directories or files. "
         "Only files with '.yml' or '.yaml' extensions are taken into account if files or directories are specified.",
     )
     parser.add_argument(
@@ -144,14 +144,13 @@ def create_convert_parser(parser: ArgumentParser):
         "input",
         type=_file,
         help="SBOM File to convert. Currently supports JSON.",
-        nargs="?",
     )
     parser.add_argument(
         "--output-format",
         "-f",
         choices=[v.value for v in SBOMFormat],
         required=True,
-        help="",
+        help="SBOM format to create.",
     )
     parser.add_argument(
         "--custom-map",
