@@ -19,8 +19,7 @@ readme = "README.md"
 license = {text = "MIT"}
 
 [project.scripts]
-sbomgrader = "sbomgrader.__main__:grade"
-sbomconv = "sbomgrader.__main__:convert"
+sbomgrader = "sbomgrader.__main__:main"
 
 [build-system]
 requires = ["pdm-backend"]
