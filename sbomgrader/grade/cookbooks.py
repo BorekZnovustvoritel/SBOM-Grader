@@ -6,7 +6,6 @@ from typing import Iterable, Any
 
 import jsonschema
 import yaml
-from jsonschema.validators import validate
 
 from sbomgrader.core.enums import Grade, RuleForce, OutputType, ResultType
 from sbomgrader.core.utils import get_mapping
@@ -177,9 +176,8 @@ class Cookbook:
     @staticmethod
     def from_file(file_path: str | Path) -> "Cookbook":
         file_path = Path(file_path)
-        schema_dict = get_mapping(file_path)
         try:
-            validate(schema_dict, get_mapping(COOKBOOK_VALIDATION_SCHEMA_PATH))
+            schema_dict = get_mapping(file_path, COOKBOOK_VALIDATION_SCHEMA_PATH)
         except jsonschema.exceptions.ValidationError as e:
             print(
                 f"Could not parse Cookbook from file {file_path.absolute()}",

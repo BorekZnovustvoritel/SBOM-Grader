@@ -1,6 +1,7 @@
 import pytest
 
 from sbomgrader.core.documents import Document
+from sbomgrader.core.formats import SBOMFormat
 from sbomgrader.translate.translation_map import TranslationMap
 from sbomgrader.core.utils import get_mapping
 
@@ -16,16 +17,17 @@ class ComparableDoc:
             )
 
 
-def test_translation():
+@pytest.mark.parametrize(["spdx"], [("spdx23",), ("spdx22",)])
+@pytest.mark.parametrize(["cyclonedx"], [("cdx16",), ("cdx15",)])
+def test_translation(cyclonedx, spdx):
     tm = TranslationMap.from_file(
         "tests/testdata/test_translation/sample_spdx23_cdx16.yml"
     )
     first_doc = Document(
-        get_mapping("tests/testdata/test_translation/sample_spdx23.json")
+        get_mapping(f"tests/testdata/test_translation/sample_{spdx}.json")
     )
     second_doc = Document(
-        get_mapping("tests/testdata/test_translation/sample_cdx16.json")
+        get_mapping(f"tests/testdata/test_translation/sample_{cyclonedx}.json")
     )
-    # raise ValueError(tm.convert(second_doc).doc)
-    assert tm.convert(first_doc).doc == second_doc.doc
-    assert tm.convert(second_doc).doc == first_doc.doc
+    assert tm.convert(first_doc, SBOMFormat(cyclonedx)).doc == second_doc.doc
+    assert tm.convert(second_doc, SBOMFormat(spdx)).doc == first_doc.doc

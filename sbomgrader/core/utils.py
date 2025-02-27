@@ -3,16 +3,24 @@ from pathlib import Path
 
 import jinja2
 import yaml
+from jsonschema import validate
 
 from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.enums import Grade
 
 
-def get_mapping(schema: str | Path) -> dict | None:
+def is_mapping(file: str | Path) -> bool:
+    name = file if isinstance(file, str) else file.name
+    return name.endswith(".json") or name.endswith(".yml") or name.endswith(".yaml")
+
+
+def get_mapping(
+    schema: str | Path, validation_schema: str | Path | None = None
+) -> dict | None:
     if isinstance(schema, str):
         schema = Path(schema)
     if isinstance(schema, Path):
-        if not schema.exists():
+        if not schema.exists() or not is_mapping(schema):
             return None
         with open(schema) as stream:
             if schema.name.endswith(".json"):
@@ -21,7 +29,9 @@ def get_mapping(schema: str | Path) -> dict | None:
                 doc = yaml.safe_load(stream)
             else:
                 doc = {}
-            return doc
+    if validation_schema:
+        validate(doc, get_mapping(validation_schema))
+    return doc
 
 
 def get_path_to_implementations(schema_path: str | Path) -> Path:
