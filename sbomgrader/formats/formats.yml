@@ -1,0 +1,28 @@
+---
+formats:
+  - name: SPDX23
+    value: spdx23
+    expectedStructure:
+      spdxVersion: SPDX-2.3
+    fallback:
+      - SPDX22
+  - name: SPDX22
+    value: spdx22
+    expectedStructure:
+      spdxVersion: SPDX-2.2
+    fallback:
+      - SPDX23
+  - name: CYCLONEDX16
+    value: cdx16
+    expectedStructure:
+      bomFormat: CycloneDX
+      specVersion: "1.6"
+    fallback:
+      - CYCLONEDX15
+  - name: CYCLONEDX15
+    value: cdx15
+    expectedStructure:
+      bomFormat: CycloneDX
+      specVersion: "1.5"
+    fallback:
+      - CYCLONEDX16

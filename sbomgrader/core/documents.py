@@ -1,8 +1,13 @@
+import json
 from functools import cached_property
 from typing import Any
 
-from sbomgrader.core.definitions import SBOM_FORMAT_DEFINITION_MAPPING
-from sbomgrader.core.enums import SBOMType, Implementation
+from sbomgrader.core.enums import SBOMType
+from sbomgrader.core.formats import (
+    SBOM_FORMAT_DEFINITION_MAPPING,
+    SBOMFormat,
+    get_fallbacks,
+)
 
 
 class Document:
@@ -10,8 +15,8 @@ class Document:
         self._doc = document_dict
 
     @cached_property
-    def implementation(self) -> Implementation:
-        for item in Implementation:
+    def sbom_format(self) -> SBOMFormat:
+        for item in SBOMFormat:
             field_to_check = SBOM_FORMAT_DEFINITION_MAPPING[item]
 
             if all(
@@ -21,8 +26,14 @@ class Document:
         raise NotImplementedError("Document is in an unsupported standard.")
 
     @property
+    def sbom_format_fallback(self) -> set[SBOMFormat]:
+        return get_fallbacks(self.sbom_format)
+
+    @property
     def sbom_type(self) -> "SBOMType":
-        if self.implementation is Implementation.SPDX23:
+        if self.sbom_format is SBOMFormat.SPDX23 or self.sbom_format in get_fallbacks(
+            SBOMFormat.SPDX23
+        ):
             relationships = self._doc.get("relationships", [])
             main_relationships = [
                 relationship
@@ -71,7 +82,10 @@ class Document:
             ) == sorted(relationships, key=sort_relationship_key):
                 return SBOMType.PRODUCT
             return SBOMType.UNKNOWN
-        elif self.implementation is Implementation.CYCLONEDX15:
+        elif (
+            self.sbom_format is SBOMFormat.CYCLONEDX16
+            or self.sbom_format in get_fallbacks(SBOMFormat.CYCLONEDX16)
+        ):
             if self._doc.get("metadata", {}).get("component", {}).get("type") in {
                 "operating-system"
             }:
@@ -83,3 +97,7 @@ class Document:
     @property
     def doc(self):
         return self._doc
+
+    @property
+    def json_dump(self) -> str:
+        return json.dumps(self._doc, indent=4)

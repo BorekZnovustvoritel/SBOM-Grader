@@ -4,11 +4,10 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable
 
-from jsonschema.validators import validate
-
 from sbomgrader.core.documents import Document
 from sbomgrader.core.enums import ResultType
 from sbomgrader.core.field_resolve import FieldResolver, Variable
+from sbomgrader.core.formats import SBOMFormat
 from sbomgrader.grade.rule_loader import RuleLoader
 from sbomgrader.core.definitions import (
     RULESET_VALIDATION_SCHEMA_PATH,
@@ -131,9 +130,7 @@ class Rule:
 class RuleSet:
     @staticmethod
     def from_file(file: str | Path):
-        schema_dict = get_mapping(file)
-
-        validate(schema_dict, get_mapping(RULESET_VALIDATION_SCHEMA_PATH))
+        schema_dict = get_mapping(file, RULESET_VALIDATION_SCHEMA_PATH)
 
         implementation_loaders: dict[str, RuleLoader] = {}
 
@@ -231,6 +228,19 @@ class RuleSet:
         for implementation, var_dict in variables.items():
             self.field_resolvers[implementation] = FieldResolver(var_dict)
 
+    @property
+    def formats(self) -> set[SBOMFormat]:
+        return {SBOMFormat(k) for k in self.rules}
+
+    def format_for_doc(self, doc: Document) -> SBOMFormat | None:
+        if doc.sbom_format in self.formats:
+            return doc.sbom_format
+        fallbacks = doc.sbom_format_fallback
+        for format_ in self.formats:
+            if format_ in fallbacks:
+                return format_
+        return None
+
     def __add__(self, other: "RuleSet"):
         if not isinstance(other, RuleSet):
             raise TypeError(f"Cannot combine RuleSet with instance of {type(other)}!")
@@ -279,8 +289,8 @@ class RuleSet:
         res = Result()
         if isinstance(document, dict):
             document = Document(document)
-        implementation = document.implementation.value
-        global_variables_resolver = self.field_resolvers.get(implementation)
+        format_ = self.format_for_doc(document).value
+        global_variables_resolver = self.field_resolvers.get(format_)
         global_variables = {}
         if global_variables_resolver:
             global_variables = global_variables_resolver.resolve_variables(document.doc)
@@ -289,9 +299,9 @@ class RuleSet:
             if rule not in self.selection:
                 res.skipped.add(rule)
                 continue
-            if rule_obj := self.rules.get(implementation, {}).get(rule):
+            if rule_obj := self.rules.get(format_, {}).get(rule):
                 rule_obj: Rule | None
-                if not callable(rule_obj.func):
+                if not callable(rule_obj):
                     res.not_implemented.add(rule)
                 else:
                     res += rule_obj(document, fallback_vars=global_variables)
