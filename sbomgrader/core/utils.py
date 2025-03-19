@@ -1,12 +1,16 @@
+import datetime
 import json
 from pathlib import Path
+from typing import Any
 
 import jinja2
 import yaml
 from jsonschema import validate
 
 from sbomgrader.core.cached_python_loader import PythonLoader
+from sbomgrader.core.definitions import FIELD_NOT_PRESENT, TIME_ISO_FORMAT_STRING
 from sbomgrader.core.enums import Grade
+from sbomgrader import __version__ as version
 
 
 def is_mapping(file: str | Path) -> bool:
@@ -53,8 +57,28 @@ def validation_passed(validation_grade: Grade, minimal_grade: Grade) -> bool:
 
 def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment:
     env = jinja2.Environment()
-    env.filters["unwrap"] = lambda x: next(iter(x), None)
+    env.globals["DATETIME_NOW"] = datetime.datetime.now(datetime.UTC).strftime(
+        TIME_ISO_FORMAT_STRING
+    )
+    env.globals["SBOMGRADER_SIGNATURE"] = f"SBOMGrader {version}"
+
+    def unwrap(list_: list[Any]) -> Any:
+        return next(iter(list_), FIELD_NOT_PRESENT)
+
+    def sliced(
+        list_: list[Any] | str, start: int = 0, end: int = None
+    ) -> list[Any] | str:
+        if not isinstance(list_, list) or not isinstance(list_, str):
+            return []
+        return list_[start:end]
+
+    env.filters["unwrap"] = unwrap
+    env.filters["slice"] = sliced
     if transformer_file and transformer_file.exists():
-        python_loader = PythonLoader(transformer_file)
-        env.filters["func"] = lambda x, name: python_loader.load_func(name)(x)
+
+        def func(item: Any, name: str, **kwargs) -> Any:
+            python_loader = PythonLoader(transformer_file)
+            return python_loader.load_func(name)(item, **kwargs)
+
+        env.filters["func"] = func
     return env

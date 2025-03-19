@@ -21,6 +21,7 @@ from sbomgrader.core.utils import (
     get_path_to_var_transformers,
     create_jinja_env,
 )
+from sbomgrader.translate.prune import prune, should_remove
 
 
 class Data:
@@ -36,13 +37,21 @@ class Data:
         self.transformer_path = transformer_path
         self.jinja_env = create_jinja_env(self.transformer_path)
 
-    def render(self, doc: Document, path_to_instance: str | None = None) -> Any:
+    def render(
+        self,
+        doc: Document,
+        path_to_instance: str | None = None,
+        prune_empty: bool = True,
+    ) -> Any:
         resolved_variables = self.field_resolver.resolve_variables(
             doc.doc, path_to_instance
         )
-        return yaml.safe_load(
+        dict_ = yaml.safe_load(
             self.jinja_env.from_string(self.template).render(**resolved_variables)
         )
+        if prune_empty:
+            dict_ = prune(dict_)
+        return dict_
 
 
 class Chunk:
@@ -98,6 +107,7 @@ class Chunk:
         return getattr(self, f"{self._first_or_second(sbom_format)}resolver")
 
     def occurrences(self, doc: Document) -> list[str]:
+        """Returns a list of string fieldPaths where the element occurs."""
         resolver = self.resolver_for(doc.sbom_format)
         return resolver.get_paths(doc.doc, self.field_path_for(doc.sbom_format), {})
 
@@ -124,9 +134,9 @@ class Chunk:
         append_path = self.field_path_for(convert_to)
         relevant_data = self.data_for(convert_to)
         for chunk_occurrence in self.occurrences(orig_doc):
-            appender_resolver.insert_at_path(
-                new_doc, append_path, relevant_data.render(orig_doc, chunk_occurrence)
-            )
+            rendered_data = relevant_data.render(orig_doc, chunk_occurrence)
+            if not should_remove(rendered_data):
+                appender_resolver.insert_at_path(new_doc, append_path, rendered_data)
 
 
 class TranslationMap:

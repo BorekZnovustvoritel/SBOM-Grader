@@ -1,15 +1,288 @@
 ---
 first: spdx23
 second: cdx16
+firstVariables:
+  - name: main_element_spdxid
+    fieldPath: relationships[spdxElementId=SPDXRef-DOCUMENT,relationshipType=DESCRIBES]relatedSpdxElement
+  - name: main_element_name
+    fieldPath: packages[SPDXID=${main_element_spdxid}]name
+  - name: main_element_purls
+    fieldPath: packages[SPDXID=${main_element_spdxid}]externalRefs[referenceType=purl]referenceLocator
+  - name: rpm_packages_spdxids  # TODO adapt relationships
+    fieldPath: packages[externalRefs[referenceType=purl]referenceLocator%=pkg:rpm/]SPDXID
+  - name: image_packages_spdxids  # TODO
+    fieldPath: packages[externalRefs[referenceType=purl]referenceLocator%=pkg:oci/]SPDXID
+  - name: product_packages_spdxids  # TODO
+    fieldPath: packages[SPDXID!=${rpm_packages_spdxids},SPDXID!=${image_packages_spdxids},externalRefs[referenceType%=cpe]referenceLocator!=FIELD_NOT_PRESENT]
+secondVariables:
+  - name: main_element_bom_ref
+    fieldPath: components[name=${main_element_name}]bom-ref
+  - name: main_element_name
+    fieldPath: metadata.component.name
+  - name: rpm_components_bom_refs # TODO
+    fieldPath: components[?.purl%=pkg:rpm/]bom-ref
+  - name: image_components_bom_refs # TODO
+    fieldPath: components[?.purl%=pkg:oci/]bom-ref
+  - name: product_components_bom_refs # TODO
+    fieldPath: components[?.bom-ref!=${rpm_components_bom_refs},?.bom-ref!=${image_components_bom_refs},?.cpe!=FIELD_NOT_PRESENT]bom-ref
 chunks:
   - name: Skeleton
+    firstVariables:
+      - name: creation_time
+        fieldPath: creationInfo.created
+      - name: creationOrg
+        fieldPath: 'creationInfo.creators[.%=Organization: ]'
+      - name: main_element_supplier_name
+        fieldPath: packages[SPDXID=${main_element_spdxid}]supplier
+      - name: document_namespace
+        fieldPath: documentNamespace
+      - name: tools
+        fieldPath: 'creationInfo.creators[.%=Tool: ]'
+    secondVariables:
+      - name: creation_time
+        fieldPath: metadata.timestamp
+      - name: tools
+        fieldPath: metadata.tools[|]
+      - name: supplier
+        fieldPath: metadata.supplier.name
+      - name: supplier_urls
+        fieldPath: metadata.supplier.url[|]
+      - name: serial_number
+        fieldPath: serialNumber
     firstData: |-
       spdxVersion: "SPDX-2.3"
       dataLicense: "CC0-1.0"
       SPDXID: "SPDXRef-DOCUMENT"
+      creationInfo:
+        created: "{{ creation_time | unwrap }}"
+        creators:
+          {% for tool in tools %}
+          - "Tool: {{ tool.name }} {{ tool.version }}"
+          {% endfor %}
+          {% for s in supplier %}
+          - "Organization: {{ s }}"
+          {% endfor %}
+          - "Tool: {{ SBOMGRADER_SIGNATURE }}"
+      licenseListVersion: "3.25"
+      name: {{ main_element_name | unwrap }}
+      documentNamespace: {{ supplier_urls | unwrap | func(name="url_to_namespace", component_name_var=main_element_name, serial_no_var=serial_number) }}
+      relationships:
+        - spdxElementId: SPDXRef-DOCUMENT
+          relationshipType: DESCRIBES
+          relatedSpdxElement: "{{ main_element_bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=main_element_name) }}"
     firstFieldPath: .
     secondData: |-
       bomFormat: "CycloneDX"
       specVersion: "1.6"
+      serialNumber: urn:uuid:{{ _ | func(name="get_serial_number") }}
       version: 1
+      metadata:
+        timestamp: "{{ creation_time | unwrap }}"
+        component:
+          bom-ref: {{ main_element_spdxid | unwrap | func(name="spdxid_to_bom_ref", purls=main_element_purls) }}
+          name: {{ main_element_name | unwrap }}
+          publisher: {{ creationOrg | unwrap | slice(start=13) }}
+          purl: {{ main_element_purls | unwrap }}
+          type: {{ main_element_purls | unwrap | func(name="purl_to_component_type") }}
+        supplier:
+          name: {{ main_element_supplier_name | unwrap | func(name="sanitise_supplier") }}
+          url:
+          {% for url in document_namespace | func(name="namespaces_to_url") %}
+            - {{ url }}
+          {% endfor %}
+        tools:
+        {% for tool in tools %}
+          - {{ tool | func(name="tool_to_dict") }}
+        {% endfor %}
     secondFieldPath: .
+
+  - name: Relationship dependencies of RPMs # TODO
+    firstVariables:
+      - name:
+        fieldPath:
+    firstFieldPath:
+    firstData: |-
+    secondVariables:
+      - name:
+        fieldPath:
+    secondFieldPath:
+    secondData: |-
+
+  - name: Relationship dependencies of Images
+    firstVariables:
+      - name: spdxid_first_side
+        fieldPath: '@.spdxElementId'
+      - name: spdxid_second_side
+        fieldPath: '@.relatedSpdxElement'
+      - name: first_component_purls
+        fieldPath: packages[SPDXID=${spdxid_first_side}]externalRefs[referenceType=purl]referenceLocator
+      - name: second_component_purls
+        fieldPath: packages[SPDXID=${spdxid_second_side}]externalRefs[referenceType=purl]referenceLocator
+    firstFieldPath: relationships[relationshipType=CONTAINS]
+    firstData: |-
+      {% for related in bom_ref_second_side_list %}
+      - spdxElementId: {{ bom_ref_first_side | unwrap | func(name="bom_ref_to_spdxid", component_name_var=first_element_name) }}
+        relationshipType: CONTAINS
+        relatedSpdxElement: {{ related | func(name="bom_ref_to_spdxid", component_name_var=second_element_name)}}
+      {% endfor %}
+    secondVariables:
+      - name: bom_ref_first_side
+        fieldPath: '@.ref'
+      - name: bom_ref_second_side_list
+        fieldPath: '@.dependsOn[|]'
+      - name: first_element_name
+        fieldPath: components[bom-ref=${bom_ref_first_side}]name
+      - name: second_element_name
+        fieldPath: components[bom-ref=${bom_ref_second_side_list}]name
+    secondFieldPath: dependencies[dependsOn[&]%=]
+    secondData: |-
+      dependsOn:
+        - {{ spdxid_second_side | unwrap | func(name="spdxid_to_bom_ref", purls=second_component_purls) }}
+      ref: {{ spdxid_first_side | unwrap | func(name="spdxid_to_bom_ref", purls=first_component_purls) }}
+
+  - name: Relationship dependencies of Products
+    firstVariables:
+      - name: spdxid_first_side
+        fieldPath: '@.spdxElementId'
+      - name: spdxid_second_side
+        fieldPath: '@.relatedSpdxElement'
+      - name: first_component_purls
+        fieldPath: packages[SPDXID=${spdxid_first_side}]externalRefs[referenceType=purl]referenceLocator
+      - name: second_component_purls
+        fieldPath: packages[SPDXID=${spdxid_second_side}]externalRefs[referenceType=purl]referenceLocator
+    firstFieldPath: relationships[relationshipType=PACKAGE_OF]
+    firstData: |-
+      {% for related in bom_ref_second_side_list %}
+      - spdxElementId: {{ related | func(name="bom_ref_to_spdxid", component_name_var=second_element_name) }},
+        relationshipType: PACKAGE_OF,
+        relatedSpdxElement: {{ bom_ref_first_side | unwrap | func(name="bom_ref_to_spdxid", component_name_var=first_element_name) }}
+      {% endfor %}
+    secondVariables:
+      - name: bom_ref_first_side
+        fieldPath: '@.ref'
+      - name: bom_ref_second_side_list
+        fieldPath: '@.provides[|]'
+      - name: first_element_name
+        fieldPath: components[bom-ref=${bom_ref_first_side}]name
+      - name: second_element_name
+        fieldPath: components[bom-ref=${bom_ref_second_side_list}]name
+    secondFieldPath: dependencies[provides[&]%=]  # This matches dependencies where field `provides` is a list of strings
+    secondData: |-
+      provides:
+        - {{ spdxid_second_side | unwrap | func(name="spdxid_to_bom_ref", purls=second_component_purls) }}
+      ref: {{ spdxid_first_side | unwrap | func(name="spdxid_to_bom_ref", purls=first_component_purls) }}
+
+  - name: Components
+    firstFieldPath: packages[|]
+    firstVariables:
+      - name: name
+        fieldPath: '@.?.name'
+      - name: spdxid
+        fieldPath: '@.?.SPDXID'
+      - name: purls
+        fieldPath: '@.?.externalRefs[?.referenceType=purl]?.referenceLocator'
+      - name: version_info
+        fieldPath: '@.?.versionInfo'
+      - name: licenses
+        fieldPath: '@.?.licenseDeclared'
+      - name: cpes
+        fieldPath: '@.?.externalRefs[?.referenceType%=cpe]?.referenceLocator'
+      - name: annotation_comments
+        fieldPath: '@.?.annotations[?.annotationType=OTHER]?.comment'
+      - name: hashes
+        fieldPath: '@.checksums[|]'
+
+    firstData: |-
+      SPDXID: {{ bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=name) }}
+      name: {{ name | unwrap }}
+      versionInfo: {{ version | unwrap }}
+      supplier: {{ publisher | unwrap }}
+      downloadLocation: {{ TODO }} # Does not work right now
+      packageFileName: {{ TODO }} # Does not work right now
+      licenseDeclared: {{ licenses | unwrap }}
+      externalRefs:
+      {% for p in purl %}
+        - referenceCategory: PACKAGE-MANAGER
+          referenceType: purl
+          referenceLocator: {{ p }}
+      {% endfor %}
+      {% for p in additional_purls %}
+        - referenceCategory: PACKAGE-MANAGER
+          referenceType: purl
+          referenceLocator: {{ p }}
+      {% endfor %}
+      {% for c in cpes %}
+        - referenceCategory: SECURITY
+          referenceType: {{ c | func(name="cpe_to_cpe_type") }}
+          referenceLocator: {{ c }}
+      {% endfor %}
+      checksums:
+      {% for checksum in hashes %}
+        - algorithm: {{ checksum.alg | func(name="hash_alg_from_cdx_to_spdx") }}
+          checksumValue: {{ checksum.content }}
+      {% endfor %}
+      annotations:
+      {% for prop in properties %}
+        - annotationType: OTHER
+          annotator: "tool: {{ SBOMGRADER_SIGNATURE }}"
+          annotationDate: {{ DATETIME_NOW }}
+          comment: '{"{{ prop.name }}": "{{ prop.value }}"}'
+      {% endfor %}
+
+    secondFieldPath: components[|]
+    secondVariables:
+      - name: bom_ref
+        fieldPath: '@.bom-ref'
+      - name: name
+        fieldPath: '@.name'
+      - name: version
+        fieldPath: '@.version'
+      - name: publisher
+        fieldPath: '@.publisher'
+      - name: licenses
+        fieldPath: '@.licenses[|]license.name'
+      - name: purl
+        fieldPath: '@.purl'
+      - name: hashes
+        fieldPath: '@.hashes'
+      - name: properties
+        fieldPath: '@.properties[|]'
+      - name: additional_purls
+        fieldPath: '@.evidence.identity[field=purl]concludedValue'
+      - name: cpes
+        fieldPath: '@.evidence.identity[field=cpe]concludedValue'
+    secondData: |-
+      name: {{ name | unwrap }}
+      bom-ref: {{ spdxid | unwrap | func(name="spdxid_to_bom_ref", purls=purls) }}
+      purl: {{ purls | unwrap }}
+      type: {{ purls | unwrap | func(name="purl_to_component_type") }}
+      version: {{ version_info | unwrap }}
+      licenses:
+      {% for license in licenses %}
+        - license:
+          name: {{ license }}
+      {% endfor %}
+      properties:
+      {% for annotation in annotation_comments | func(name="annotations_to_properties") %}
+        - {{ annotation }}
+      {% endfor %}
+      evidence:
+        identity:
+        {% for purl in purls | slice(start=1) %}
+          - field: purl
+            concludedValue: "{{ purl }}"
+        {% endfor %}
+        {% for cpe in cpes %}
+          - field: cpe
+            concludedValue: "{{ cpe }}"
+        {% endfor %}
+      hashes:
+      {% for hash in hashes %}
+        - alg: {{ hash.algorithm | func(name="hash_alg_from_spdx_to_cdx") }}
+          content: {{ hash.checksumValue }}
+      {% endfor %}
+      pedigree:
+        ancestors:
+          {% for ancestor in TODO %}
+            - {{ ancestor }}
+          {% endfor %}

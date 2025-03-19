@@ -313,6 +313,8 @@ class FieldResolver:
 
         if not accept_not_present_field and doc_ is FIELD_NOT_PRESENT:
             raise FieldNotPresentError("Field not present: ", path_tried)
+        if doc_ is FIELD_NOT_PRESENT:
+            return
         if not path:
             # The path has ended
             try:
@@ -532,18 +534,21 @@ class FieldResolver:
         field_path: str | list[Union[str, QueryParser]],
         fallback_variables: dict[str, Any],
     ) -> list[str]:
-        paths = set()
-        self._run_on_path(
-            doc,
-            self.__parse_field_path(field_path),
-            self.__populate_variables(doc, fallback_variables),
-            "",
-            lambda _: None,
-            False,
-            paths,
-            False,
-        )
-        return list(paths)
+        try:
+            paths = set()
+            self._run_on_path(
+                doc,
+                self.__parse_field_path(field_path),
+                self.__populate_variables(doc, fallback_variables),
+                "",
+                lambda _: None,
+                False,
+                paths,
+                False,
+            )
+            return list(paths)
+        except FieldNotPresentError:
+            return []
 
     def get_objects(
         self,
@@ -557,15 +562,18 @@ class FieldResolver:
         def add_to_ans(item: Any) -> None:
             ans.append(item)
 
-        self.run_func(
-            doc,
-            add_to_ans,
-            field_path,
-            minimal_runs=0,
-            fallback_variables=fallback_variables,
-            create_nonexistent=create_nonexistent,
-        )
-        return ans
+        try:
+            self.run_func(
+                doc,
+                add_to_ans,
+                field_path,
+                minimal_runs=0,
+                fallback_variables=fallback_variables,
+                create_nonexistent=create_nonexistent,
+            )
+            return ans
+        except FieldNotPresentError:
+            return []
 
     def get_mutable_parent(
         self,
@@ -588,6 +596,8 @@ class FieldResolver:
         to_insert: Any,
         fallback_variables: dict[str, Any] | None = None,
     ) -> None:
+        if to_insert is None:
+            raise ValueError("A")
         objects_to_mutate = self.get_mutable_parent(
             doc, field_path, fallback_variables, True
         )
@@ -602,4 +612,7 @@ class FieldResolver:
             if isinstance(last_step, str):
                 obj[last_step] = to_insert
             elif isinstance(last_step, QueryParser):
-                obj.append(to_insert)
+                if isinstance(to_insert, list):
+                    obj.extend(to_insert)
+                else:
+                    obj.append(to_insert)

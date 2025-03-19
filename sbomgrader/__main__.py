@@ -38,7 +38,7 @@ class GradeConfig:
     def from_args(args: Namespace) -> "GradeConfig":
         return GradeConfig(
             input_file=args.input,
-            cookbook_references=args.cookbook,
+            cookbook_references=args.cookbook or [],
             content_type=args.content_type,
             sbom_type=args.sbom_type,
             passing_grade=args.passing_grade,
@@ -135,7 +135,7 @@ class ConvertConfig:
         return ConvertConfig(
             input_file=args.input,
             output_format=args.output_format,
-            custom_maps=args.custom_map,
+            custom_maps=args.custom_map or [],
         )
 
 
