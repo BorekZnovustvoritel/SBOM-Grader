@@ -1,8 +1,9 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
+from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
     TRANSLATION_MAP_VALIDATION_SCHEMA_PATH,
 )
@@ -20,6 +21,7 @@ from sbomgrader.core.utils import (
     get_mapping,
     get_path_to_var_transformers,
     create_jinja_env,
+    get_path_to_module,
 )
 from sbomgrader.translate.prune import prune, should_remove
 
@@ -147,6 +149,7 @@ class TranslationMap:
         chunks: list[Chunk],
         first_variables: dict[str, Variable] = None,
         second_variables: dict[str, Variable] = None,
+        postprocessing_funcs: dict[SBOMFormat, list[Callable]] = None,
     ):
         self.first = first
         self.second = second
@@ -155,6 +158,7 @@ class TranslationMap:
         self.second_variables = second_variables or {}
         self.first_resolver = FieldResolver(first_variables)
         self.second_resolver = FieldResolver(second_variables)
+        self.postprocessing_funcs = postprocessing_funcs or {}
 
     @property
     def first_with_fallbacks(self) -> set[SBOMFormat]:
@@ -163,6 +167,13 @@ class TranslationMap:
     @property
     def second_with_fallbacks(self) -> set[SBOMFormat]:
         return {self.second, *get_fallbacks(self.second)}
+
+    def init_postprocessing_functions(self, map_file_path: str | Path) -> None:
+        for first_or_second, form in ("first", self.first), ("second", self.second):
+            file = get_path_to_module(
+                map_file_path, "postprocessing", first_or_second, form
+            )
+            self.postprocessing_funcs[form] = PythonLoader(file).load_all_functions()
 
     @staticmethod
     def from_file(file: str | Path) -> "TranslationMap":
@@ -174,20 +185,11 @@ class TranslationMap:
         first_glob_var = schema_dict.get("firstVariables")
         second_glob_var = schema_dict.get("secondVariables")
 
-        transformer_dir = get_path_to_var_transformers(file)
-        first_transformer_file = None
-        for filename in ("first.py", f"{first.value}.py"):
-            f = transformer_dir / filename
-            if f.exists():
-                first_transformer_file = f
-                break
+        first_transformer_file = get_path_to_module(file, "transformer", "first", first)
         first_glob_var_initialized = Variable.from_schema(first_glob_var)
-        second_transformer_file = None
-        for filename in ("second.py", f"{second.value}.py"):
-            f = transformer_dir / filename
-            if f.exists():
-                second_transformer_file = f
-                break
+        second_transformer_file = get_path_to_module(
+            file, "transformer", "second", second
+        )
         second_glob_var_initialized = Variable.from_schema(second_glob_var)
 
         chunks = []
@@ -226,6 +228,13 @@ class TranslationMap:
             chunks.append(chunk)
         return TranslationMap(first, second, chunks)
 
+    def _output_format(self, doc: Document) -> SBOMFormat:
+        for form in self.first, self.second:
+            if doc is not form and not any(
+                form == fallback for fallback in get_fallbacks(form)
+            ):
+                return form
+
     def convert(
         self, doc: Document, override_format: SBOMFormat | None = None
     ) -> Document:
@@ -244,6 +253,14 @@ class TranslationMap:
         ), f"This map cannot convert from {doc.sbom_format}."
         for chunk in self.chunks:
             chunk.convert_and_add(doc, new_data)
+        for postprocessing_func in self.postprocessing_funcs.get(
+            self._output_format(doc), []
+        ):
+            res = postprocessing_func(doc, new_data)
+            if res:
+                # If the function returns anything, make it the new data output.
+                # Assume mutations were performed in-place otherwise.
+                new_data = res
         if override_format is not None:
             new_data.update(SBOM_FORMAT_DEFINITION_MAPPING[override_format])
         return Document(new_data)

@@ -1,7 +1,7 @@
 import datetime
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import jinja2
 import yaml
@@ -50,6 +50,36 @@ def get_path_to_var_transformers(schema_path: str | Path) -> Path:
     return schema_path.parent / "transformers" / schema_path.name.split(".", 1)[0]
 
 
+def get_path_to_postprocessing(schema_path: str | Path) -> Path:
+    if isinstance(schema_path, str):
+        schema_path = Path(schema_path)
+    return schema_path.parent / "postprocessing" / schema_path.name.split(".", 1)[0]
+
+
+def get_path_to_module(
+    schema_path: str | Path,
+    kind: Literal["transformer", "postprocessing"],
+    first_or_second: Literal["first", "second"],
+    sbom_format: "sbomgrader.core.formats.SBOMFormat,",
+):
+    if kind == "transformer":
+        mod_dir = get_path_to_var_transformers(schema_path)
+    elif kind == "postprocessing":
+        mod_dir = get_path_to_postprocessing(schema_path)
+    else:
+        raise ValueError(f"Wrong kind value: {kind}")
+    file = None
+    for filename in (
+        f"{first_or_second}.py",
+        f"{sbom_format.value}.py",
+    ):
+        f = mod_dir / filename
+        if f.exists():
+            file = f
+            break
+    return file
+
+
 def validation_passed(validation_grade: Grade, minimal_grade: Grade) -> bool:
     # minimal is less than or equal to validation
     return Grade.compare(validation_grade, minimal_grade) < 1
@@ -63,7 +93,10 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
     env.globals["SBOMGRADER_SIGNATURE"] = f"SBOMGrader {version}"
 
     def unwrap(list_: list[Any]) -> Any:
-        return next(iter(list_), FIELD_NOT_PRESENT)
+        try:
+            return next(iter(list_), FIELD_NOT_PRESENT)
+        except TypeError:
+            return FIELD_NOT_PRESENT
 
     def sliced(
         list_: list[Any] | str, start: int = 0, end: int = None
@@ -72,8 +105,17 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
             return []
         return list_[start:end]
 
+    def fallback(first: list[Any], *other: list[Any]) -> list[Any]:
+        if first and first is not FIELD_NOT_PRESENT:
+            return first
+        for o in other:
+            if o and o is not FIELD_NOT_PRESENT:
+                return o
+        return []
+
     env.filters["unwrap"] = unwrap
     env.filters["slice"] = sliced
+    env.filters["fallback"] = fallback
     if transformer_file and transformer_file.exists():
 
         def func(item: Any, name: str, **kwargs) -> Any:

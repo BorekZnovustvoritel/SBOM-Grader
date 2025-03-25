@@ -32,19 +32,22 @@ def hash_alg_from_cdx_to_spdx(algorithm: str) -> str:
 
 
 def url_to_namespace(
-    url: str, component_name_var: list[str], serial_no_var: list[str]
+    url: str,
+    component_name_var: list[str],
+    serial_no_var: list[str],
+    fallback_url_var: list[str],
 ) -> str:
     if not url or not isinstance(url, str):
-        org_url = "https://github.com/BorekZnovustvoritel/SBOM-Grader"
-    else:
-        org_url = url
+        url = next(iter(fallback_url_var), None)
+    if not url or not isinstance(url, str):
+        url = "https://github.com/BorekZnovustvoritel/SBOM-Grader"
     end_string = urllib.parse.quote_plus(
         next(iter(component_name_var), FIELD_NOT_PRESENT)
         + "/"
         + next(iter(serial_no_var), FIELD_NOT_PRESENT)
     )
 
-    return org_url + "/" + end_string
+    return url + "/" + end_string
 
 
 def cpe_to_cpe_type(cpe: str) -> str:

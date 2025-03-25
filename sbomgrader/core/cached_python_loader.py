@@ -45,3 +45,11 @@ class PythonLoader:
                 file=sys.stderr,
             )
         return self.__functions.get(name, None)
+
+    def load_all_functions(self) -> list[Callable]:
+        if self._unloaded_file_references:
+            self._load_all_references()
+        ans = []
+        for func in self.__functions.values():
+            ans.append(func)
+        return ans

@@ -23,19 +23,39 @@ class PathParser:
         self.ans: dict[str, list[Union[str, QueryParser]]] = defaultdict(list)
 
     def __create_field(
-        self, field: str, next_is_query: bool, relative_path: str
+        self, field: str, next_is_query: bool, relative_path: "PathParser"
     ) -> None:
         if self.__next_is_query:
-            raw_field_path = field
-            if field.startswith("@"):
-                raw_field_path = field.replace("@", relative_path, 1)
-            next_ = QueryParser(raw_field_path)
+            if field == "@":
+                try:
+                    appropriate_relative_field = relative_path.parse()[
+                        len(self.ans[relative_path.raw_path])
+                    ]
+                except IndexError:
+                    raise ValueError(
+                        f"Problem parsing path '{self._path}' with relative hint '{relative_path.raw_path}'. "
+                        f"The relative hint is too short!"
+                    )
+                if isinstance(appropriate_relative_field, QueryParser):
+                    index_query = next(iter(appropriate_relative_field.parse()), None)
+                    if not index_query:
+                        raise ValueError(
+                            f"Problem parsing path '{self._path}' with relative hint '{relative_path.raw_path}'. "
+                            f"There are no queries to follow at step '{field}'."
+                        )
+                    if index_query.type_ is not QueryType.INDEX:
+                        raise ValueError(
+                            f"Problem parsing path '{self._path}' with relative hint '{relative_path.raw_path}'. "
+                            f"This is not an index query type: '{index_query.type_}'"
+                        )
+                    field = index_query.value
+            next_ = QueryParser(field)
         else:
             next_ = field.strip()
         self.__next_is_query = next_is_query
 
         if next_:
-            self.ans[relative_path].append(next_)
+            self.ans[relative_path.raw_path].append(next_)
 
     def parse(
         self, relative_path: str | None = None
@@ -43,6 +63,18 @@ class PathParser:
         relative_path = relative_path or ""
         if relative_path in self.ans:
             return self.ans[relative_path]
+        parsed_relative_path = PathParser(relative_path)
+        if relative_path:
+            if any(
+                any(query.type_ != QueryType.INDEX for query in item.parse())
+                for item in parsed_relative_path.parse()
+                if isinstance(item, QueryParser)
+            ):
+                raise ValueError(
+                    "Relative path can only include field names and absolute indices. "
+                    "HINT: If you wish to get a list of absolute paths, use the method "
+                    "`FieldResolver.get_paths()`."
+                )
         resolve_path = self._path
         if resolve_path.startswith("@"):
             if not relative_path:
@@ -55,7 +87,7 @@ class PathParser:
         for char in resolve_path:
             if char == "[":
                 if not in_block:
-                    self.__create_field(buffer, True, relative_path)
+                    self.__create_field(buffer, True, parsed_relative_path)
                     buffer = ""
                 else:
                     buffer += char
@@ -63,21 +95,33 @@ class PathParser:
             elif char == "]":
                 in_block -= 1
                 if not in_block:
-                    self.__create_field(buffer, False, relative_path)
+                    self.__create_field(buffer, False, parsed_relative_path)
                     buffer = ""
                 else:
                     buffer += char
             elif char == ".":
                 if not in_block:
-                    self.__create_field(buffer, False, relative_path)
+                    self.__create_field(buffer, False, parsed_relative_path)
                     buffer = ""
                 else:
                     buffer += char
             else:
                 buffer += char
         if buffer:
-            self.__create_field(buffer, False, relative_path)
+            self.__create_field(buffer, False, parsed_relative_path)
+        self.__next_is_query = None
         return self.ans[relative_path]
+
+    def __eq__(self, other):
+        if not isinstance(other, PathParser):
+            raise TypeError(
+                f"Cannot compare PathParser to object of type {type(other)}"
+            )
+        return self._path == other._path
+
+    @property
+    def raw_path(self) -> str:
+        return self._path
 
 
 @dataclass
@@ -93,32 +137,43 @@ class Query:
 
 
 class QueryParser:
-    def __init__(self, path: str):
+    def __init__(self, path: str | int):
         self._path = path
+        self.ans: dict[str, list[Query]] = defaultdict(list)
 
     def __eq__(self, other):
         if not isinstance(other, QueryParser):
             raise TypeError(
                 f"Cannot compare QueryParser to object of type {type(other)}"
             )
-        return self._path == other._path
+        return str(self._path) == str(other._path)
 
-    def parse(self) -> list[Query]:
+    def parse(self, relative_path_index: str | None = None) -> list[Query]:
+        """Parse the query. If required, replaces the relative symbol '@' with the provided index."""
+        if relative_path_index in self.ans:
+            return self.ans[relative_path_index]
+        if isinstance(self._path, int):
+            return [Query(QueryType.INDEX, value=self._path, field_path=None)]
         queries = []
         field_buffer = ""
         operation_buffer = ""
         value_buffer = ""
         in_block = 0
+        in_operation = False
         after_operation = False
+        operation_symbols = {"!", "=", "%", "|", "&"}
         for char in self._path:
             if re.match(r"\s", char) and not after_operation:
                 continue
-            if char in {"!", "=", "%", "|", "&"} and not in_block:
-                operation_buffer += char
+            if char not in operation_symbols and in_operation:
                 after_operation = True
+            if char in operation_symbols and not in_block and not after_operation:
+                operation_buffer += char
+                in_operation = True
+
             elif after_operation and char != ",":
                 value_buffer += char
-            elif char == "," and after_operation:
+            elif char == "," and in_operation:
                 queries.append(
                     Query(
                         type_=QueryType(operation_buffer),
@@ -131,6 +186,7 @@ class QueryParser:
                 field_buffer = ""
                 operation_buffer = ""
                 value_buffer = ""
+                in_operation = False
                 after_operation = False
             elif char == "[":
                 field_buffer += char
@@ -143,11 +199,19 @@ class QueryParser:
                 field_buffer += char.strip()
 
         if field_buffer or operation_buffer or value_buffer:
-            if (
+            if field_buffer == "@" and not operation_buffer and not value_buffer:
+                # There is no query, just a relative symbol
+                query = Query(
+                    type_=QueryType.INDEX,
+                    field_path=None,
+                    value=int(relative_path_index),
+                )
+            elif (
                 (m := re.fullmatch(r"\d+", field_buffer))
                 and not operation_buffer
                 and not value_buffer
             ):
+                # There is no query, just an index
                 query = Query(
                     type_=QueryType.INDEX, field_path=None, value=int(m.group())
                 )
@@ -158,7 +222,11 @@ class QueryParser:
                     value=value_buffer.strip(),
                 )
             queries.append(query)
+        self.ans[relative_path_index] = queries
         return queries
+
+    def __repr__(self):
+        return str(self._path)
 
 
 class Variable:
@@ -184,7 +252,7 @@ class Variable:
 
     @property
     def is_relative(self) -> bool:
-        return self.raw_field_path.startswith("@.")
+        return self.raw_field_path.startswith("@.") or "[@]" in self.raw_field_path
 
     def __hash__(self):
         return self.name.__hash__()
@@ -299,6 +367,22 @@ class FieldResolver:
                     dep.remove(var_name)
         return resolved_variables
 
+    @staticmethod
+    def __add_at_path(
+        mutable_doc: dict[str, Any],
+        path_remaining: list[str | QueryParser | PathParser],
+    ):
+        if path_remaining:
+            step = path_remaining[0]
+        else:
+            return
+        if path_remaining[1:] and isinstance(path_remaining[1], str):
+            # Add a dict
+            mutable_doc[step] = {}
+        if path_remaining[1:] and isinstance(path_remaining[1], QueryParser):
+            # Add a list
+            mutable_doc[step] = []
+
     def _run_on_path(
         self,
         doc_: Union[dict, list[Any], FIELD_NOT_PRESENT],
@@ -343,6 +427,8 @@ class FieldResolver:
                 assert path[1:] and isinstance(
                     path[1], str
                 ), "Cannot use ? before anything else than a field name."
+                if path[1] not in doc_ and create_nonexistent:
+                    self.__add_at_path(doc_, path[1:])
                 if path[1] in doc_:
                     self._run_on_path(
                         doc_,
@@ -356,12 +442,7 @@ class FieldResolver:
                     )
             else:
                 if create_nonexistent and step not in doc_:
-                    if path[1:] and isinstance(path[1], str):
-                        # Add a dict
-                        doc_[step] = {}
-                    if path[1:] and isinstance(path[1], QueryParser):
-                        # Add a list
-                        doc_[step] = []
+                    self.__add_at_path(doc_, path)
                 self._run_on_path(
                     doc_.get(step, FIELD_NOT_PRESENT),
                     path[1:],
@@ -423,6 +504,20 @@ class FieldResolver:
                             func = lambda x: isinstance(x, str) and x.endswith(
                                 query.value
                             )
+                    elif query.type_ is QueryType.CONTAINS:
+                        if varname:
+                            func = lambda x: isinstance(x, str) and any(
+                                val in x for val in variable_values[varname]
+                            )
+                        else:
+                            func = lambda x: isinstance(x, str) and query.value in x
+                    elif query.type_ is QueryType.NOT_CONTAINS:
+                        if varname:
+                            func = lambda x: isinstance(x, str) and all(
+                                val not in x for val in variable_values[varname]
+                            )
+                        else:
+                            func = lambda x: isinstance(x, str) and query.value not in x
                     final_func = lambda x: (
                         to_use_in_query.add(idx) if func(x) else None
                     )
@@ -495,11 +590,6 @@ class FieldResolver:
     ) -> dict[str, Any]:
         variables = {} if not fallback_values else {**fallback_values}
         resolved_vars = self.resolve_variables(doc, warning_on=not allow_fail)
-        resolved_vars = {
-            k: [i for i in v if i and i is not FIELD_NOT_PRESENT]
-            for k, v in resolved_vars.items()
-            if v
-        }
         variables.update(resolved_vars)
         return variables
 
@@ -596,8 +686,6 @@ class FieldResolver:
         to_insert: Any,
         fallback_variables: dict[str, Any] | None = None,
     ) -> None:
-        if to_insert is None:
-            raise ValueError("A")
         objects_to_mutate = self.get_mutable_parent(
             doc, field_path, fallback_variables, True
         )
