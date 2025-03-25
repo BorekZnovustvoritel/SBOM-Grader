@@ -19,7 +19,6 @@ from sbomgrader.core.formats import (
 )
 from sbomgrader.core.utils import (
     get_mapping,
-    get_path_to_var_transformers,
     create_jinja_env,
     get_path_to_module,
 )
@@ -147,18 +146,14 @@ class TranslationMap:
         first: SBOMFormat,
         second: SBOMFormat,
         chunks: list[Chunk],
-        first_variables: dict[str, Variable] = None,
-        second_variables: dict[str, Variable] = None,
         postprocessing_funcs: dict[SBOMFormat, list[Callable]] = None,
     ):
         self.first = first
         self.second = second
         self.chunks = chunks
-        self.first_variables = first_variables or {}
-        self.second_variables = second_variables or {}
-        self.first_resolver = FieldResolver(first_variables)
-        self.second_resolver = FieldResolver(second_variables)
-        self.postprocessing_funcs = postprocessing_funcs or {}
+        self.postprocessing_funcs: dict[
+            SBOMFormat, list[Callable[[dict, dict], Any]]
+        ] = (postprocessing_funcs or {})
 
     @property
     def first_with_fallbacks(self) -> set[SBOMFormat]:
@@ -167,13 +162,6 @@ class TranslationMap:
     @property
     def second_with_fallbacks(self) -> set[SBOMFormat]:
         return {self.second, *get_fallbacks(self.second)}
-
-    def init_postprocessing_functions(self, map_file_path: str | Path) -> None:
-        for first_or_second, form in ("first", self.first), ("second", self.second):
-            file = get_path_to_module(
-                map_file_path, "postprocessing", first_or_second, form
-            )
-            self.postprocessing_funcs[form] = PythonLoader(file).load_all_functions()
 
     @staticmethod
     def from_file(file: str | Path) -> "TranslationMap":
@@ -226,12 +214,24 @@ class TranslationMap:
                 second_vars,
             )
             chunks.append(chunk)
-        return TranslationMap(first, second, chunks)
+
+        postprocessing_dict = {}
+        for first_or_second, form in ("first", first), ("second", second):
+            required_funcs = schema_dict.get(f"{first_or_second}Postprocessing", [])
+            if not required_funcs:
+                continue
+            postprocessing_dict[form] = []
+            py_file = get_path_to_module(file, "postprocessing", first_or_second, form)
+            python_loader = PythonLoader(py_file)
+            for func_name in required_funcs:
+                postprocessing_dict[form].append(python_loader.load_func(func_name))
+
+        return TranslationMap(first, second, chunks, postprocessing_dict)
 
     def _output_format(self, doc: Document) -> SBOMFormat:
         for form in self.first, self.second:
-            if doc is not form and not any(
-                form == fallback for fallback in get_fallbacks(form)
+            if doc.sbom_format is not form and not any(
+                doc.sbom_format == fallback for fallback in get_fallbacks(form)
             ):
                 return form
 
@@ -256,7 +256,7 @@ class TranslationMap:
         for postprocessing_func in self.postprocessing_funcs.get(
             self._output_format(doc), []
         ):
-            res = postprocessing_func(doc, new_data)
+            res = postprocessing_func(doc.doc, new_data)
             if res:
                 # If the function returns anything, make it the new data output.
                 # Assume mutations were performed in-place otherwise.

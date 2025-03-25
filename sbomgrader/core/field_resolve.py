@@ -252,7 +252,7 @@ class Variable:
 
     @property
     def is_relative(self) -> bool:
-        return self.raw_field_path.startswith("@.") or "[@]" in self.raw_field_path
+        return self.raw_field_path.startswith("@") or "[@]" in self.raw_field_path
 
     def __hash__(self):
         return self.name.__hash__()

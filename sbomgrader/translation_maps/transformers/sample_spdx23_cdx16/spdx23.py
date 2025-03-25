@@ -3,6 +3,8 @@ import re
 import uuid
 from typing import Any
 
+from packageurl import PackageURL
+
 from sbomgrader.core.definitions import FIELD_NOT_PRESENT
 from sbomgrader.translation_maps.transformers.sample_spdx23_cdx16.utils import (
     SPDX_CDX_HASHES,
@@ -82,3 +84,14 @@ def annotations_to_properties(annotations: list[str]) -> list[dict[str, str]]:
         except Exception:
             ans.append({"name": "COMMENT", "value": annotation})
     return ans
+
+
+def purl_with_download_location(purl: str, download_location_var: list[str]) -> str:
+    purl_obj = PackageURL.from_string(purl)
+    if "download_url" in purl_obj.qualifiers:
+        return purl
+    download_location = next(iter(download_location_var), "NOASSERTION")
+    if download_location == "NOASSERTION":
+        return purl
+    purl_obj.qualifiers["download_url"] = download_location
+    return purl_obj.to_string()

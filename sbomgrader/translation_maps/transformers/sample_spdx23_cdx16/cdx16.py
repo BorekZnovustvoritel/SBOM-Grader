@@ -3,6 +3,8 @@ import re
 import urllib.parse
 import uuid
 
+from packageurl import PackageURL
+
 from sbomgrader.core.definitions import FIELD_NOT_PRESENT
 from sbomgrader.translation_maps.transformers.sample_spdx23_cdx16.utils import (
     SPDX_CDX_HASHES,
@@ -54,3 +56,9 @@ def cpe_to_cpe_type(cpe: str) -> str:
     if cpe.startswith("cpe:2.3:"):
         return "cpe23Type"
     return "cpe22Type"
+
+
+def purl_to_download_location(purl: str) -> str:
+    purl_obj = PackageURL.from_string(purl)
+    loc = purl_obj.qualifiers.get("download_url") or "NOASSERTION"
+    return loc

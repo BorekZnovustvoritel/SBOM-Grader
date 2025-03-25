@@ -34,7 +34,8 @@ def deduplicate_srpm_midstreams(
         midstream_bom_ref_map[srpm_bom_ref] = set()
         for related_midstream_spdxid in related_midstream_spdxids:
             related_midstream_purls = field_resolver.get_objects(
-                f"packages[SPDXID={related_midstream_spdxid}]externalRefs[referenceType=purl]referenceLocator"
+                old_doc,
+                f"packages[SPDXID={related_midstream_spdxid}]externalRefs[referenceType=purl]referenceLocator",
             )
             midstream_bom_ref = spdxid_to_bom_ref(
                 related_midstream_spdxid, related_midstream_purls
@@ -111,3 +112,20 @@ def deduplicate_srpm_upstreams(
                 to_remove.append(idx)
         for idx in reversed(to_remove):
             ancestors.pop(idx)
+
+
+def merge_dependencies(_, new_doc: dict[str, Any]) -> None:
+    if "dependencies" not in new_doc:
+        return
+    new_dependencies = {}
+    for dep in new_doc.get("dependencies", []):
+        dep_ref = dep["ref"]
+        if dep_ref not in new_dependencies:
+            new_dependencies[dep_ref] = {}
+        for key in "provides", "dependsOn":
+            item_list = dep.get(key)
+            if item_list and key not in new_dependencies[dep_ref]:
+                new_dependencies[dep_ref][key] = []
+            if item_list:
+                new_dependencies[dep_ref][key].extend(item_list)
+    new_doc["dependencies"] = new_dependencies

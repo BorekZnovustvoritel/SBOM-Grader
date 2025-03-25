@@ -8,7 +8,6 @@ firstVariables:
     fieldPath: packages[SPDXID=${main_element_spdxid}]name
   - name: main_element_purls
     fieldPath: packages[SPDXID=${main_element_spdxid}]externalRefs[referenceType=purl]referenceLocator
-
   - name: srpm_packages_spdxids
     fieldPath: packages[externalRefs[referenceType=purl]referenceLocator%=pkg:rpm/,externalRefs[referenceType=purl]referenceLocator%arch=src]SPDXID
   - name: rpm_midstream_packages_spdxids
@@ -19,8 +18,6 @@ firstVariables:
     fieldPath: packages[SPDXID!=${srpm_packages_spdxids},externalRefs[referenceType=purl]referenceLocator%=pkg:rpm/]SPDXID
   - name: image_packages_spdxids
     fieldPath: packages[externalRefs[referenceType=purl]referenceLocator%=pkg:oci/]SPDXID
-#  - name: rpm_source_packages_spdxids
-#    fieldPath: packages[externalRefs[referenceType=purl]referenceLocator%=pkg:generic/,downloadLocation%=http]SPDXID
   - name: product_packages_spdxids
     fieldPath: packages[SPDXID!=${rpm_packages_spdxids},SPDXID!=${image_packages_spdxids},SPDXID!=rpm_source_packages_spdxids,externalRefs[referenceType%=cpe]referenceLocator!=FIELD_NOT_PRESENT]SPDXID
 
@@ -141,13 +138,33 @@ chunks:
         fieldPath: components[bom-ref=${bom_ref_first_side}]name
       - name: second_element_name
         fieldPath: components[bom-ref=${bom_ref_second_side_list}]name
-    secondFieldPath: dependencies[ref=${image_components_bom_refs},dependsOn[&]%=]
+    secondFieldPath: dependencies[ref=${image_components_bom_refs},?.dependsOn[&]!=]
     secondData: |-
       dependsOn:
         - {{ spdxid_second_side | unwrap | func(name="spdxid_to_bom_ref", purls=second_component_purls) }}
       ref: {{ spdxid_first_side | unwrap | func(name="spdxid_to_bom_ref", purls=first_component_purls) }}
 
-  - name: Relationship dependencies of Products
+  - name: Relationship dependencies of Products (to SPDX) # TODO check if it works
+    firstFieldPath: relationships[relationshipType=PACKAGE_OF,relatedSpdxElement=${product_packages_spdxids}]
+    firstData: |-
+      {% for related in bom_ref_second_side_list %}
+      - spdxElementId: {{ related | func(name="bom_ref_to_spdxid", component_name_var=second_element_name) }},
+        relationshipType: PACKAGE_OF,
+        relatedSpdxElement: {{ bom_ref_first_side | unwrap | func(name="bom_ref_to_spdxid", component_name_var=first_element_name) }}
+      {% endfor %}
+    secondVariables:
+      - name: bom_ref_first_side
+        fieldPath: 'dependencies[@].ref'
+      - name: bom_ref_second_side_list
+        fieldPath: '@'
+      - name: first_element_name
+        fieldPath: components[bom-ref=${bom_ref_first_side}]name
+      - name: second_element_name
+        fieldPath: components[bom-ref=${bom_ref_second_side_list}]name
+    secondFieldPath: dependencies[ref=${product_components_bom_refs}]?.provides[.!=]
+    secondData: ''
+
+  - name: Relationship dependencies of Products (to CycloneDX)  # TODO check if it works
     firstVariables:
       - name: spdxid_first_side
         fieldPath: '@.spdxElementId'
@@ -158,27 +175,52 @@ chunks:
       - name: second_component_purls
         fieldPath: packages[SPDXID=${spdxid_second_side}]externalRefs[referenceType=purl]referenceLocator
     firstFieldPath: relationships[relationshipType=PACKAGE_OF,relatedSpdxElement=${product_packages_spdxids}]
-    firstData: |-
-      {% for related in bom_ref_second_side_list %}
-      - spdxElementId: {{ related | func(name="bom_ref_to_spdxid", component_name_var=second_element_name) }},
-        relationshipType: PACKAGE_OF,
-        relatedSpdxElement: {{ bom_ref_first_side | unwrap | func(name="bom_ref_to_spdxid", component_name_var=first_element_name) }}
-      {% endfor %}
-    secondVariables:
-      - name: bom_ref_first_side
-        fieldPath: '@.ref'
-      - name: bom_ref_second_side_list
-        fieldPath: '@.provides[|]'
-      - name: first_element_name
-        fieldPath: components[bom-ref=${bom_ref_first_side}]name
-      - name: second_element_name
-        fieldPath: components[bom-ref=${bom_ref_second_side_list}]name
-    secondFieldPath: dependencies[provides[&]%=,ref=${product_components_bom_refs}]
+    firstData: ''
+    secondFieldPath: dependencies[|]
     secondData: |-
       provides:
         - {{ spdxid_second_side | unwrap | func(name="spdxid_to_bom_ref", purls=second_component_purls) }}
       ref: {{ spdxid_first_side | unwrap | func(name="spdxid_to_bom_ref", purls=first_component_purls) }}
-#
+
+  - name: Relationship dependencies of RPMs (to SPDX)
+    firstFieldPath: relationships[|]
+    firstData: |-
+      {% for bom_ref in related_bom_ref %}
+      - spdxElementId: {{ bom_ref | func(name="bom_ref_to_spdxid", component_name_var=related_name) }}
+        relationshipType: GENERATED_FROM
+        relatedSpdxElement: {{ srpm_bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=srpm_name) }}
+      {% endfor %}
+    secondVariables:
+      - name: srpm_bom_ref
+        fieldPath: 'dependencies[@].ref'
+      - name: srpm_name
+        fieldPath: components[bom-ref=${srpm_bom_ref}]
+      - name: related_bom_ref
+        fieldPath: '@'
+      - name: related_name
+        fieldPath: components[bom-ref=${related_bom_ref}]
+    secondFieldPath: dependencies[ref=${srpm_components_bom_refs}]provides[|]
+    secondData: ''
+
+  - name: Relationship dependencies of RPMs (to CDX)
+    firstVariables:
+      - name: srpm_spdxid
+        fieldPath: '@.relatedSpdxElement'
+      - name: srpm_purls
+        fieldPath: packages[SPDXID=${srpm_spdxid}]externalRefs[referenceType=purl]referenceLocator
+      - name: related_spdxid
+        fieldPath: '@.spdxElementId'
+      - name: related_purls
+        fieldPath: packages[SPDXID=${related_spdxid}]externalRefs[referenceType=purl]referenceLocator
+    firstFieldPath: relationships[relatedSpdxElement=${srpm_packages_spdxids},relationshipType=GENERATED_FROM]
+    firstData: ''
+    secondFieldPath: dependencies[|]
+    secondData: |-
+      - ref: {{ srpm_spdxid | unwrap | func(name="spdxid_to_bom_ref", purls=srpm_purls) }}
+        provides:
+          - {{ related_spdxid | unwrap | func(name="spdxid_to_bom_ref", purls=related_purls) }}
+
+
   - name: Components
     firstFieldPath: packages[SPDXID!=${rpm_midstream_packages_spdxids},SPDXID!=${rpm_upstream_packages_spdxids}]
     firstVariables:
@@ -200,6 +242,8 @@ chunks:
         fieldPath: '@.?.annotations[?.annotationType=OTHER]?.comment'
       - name: hashes
         fieldPath: '@.checksums[|]'
+      - name: download_location
+        fieldPath: '@.downloadLocation'
 
     firstData: |-
       SPDXID: {{ bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=name) }}
@@ -208,7 +252,7 @@ chunks:
       {% for s in supplier_name | fallback(publisher) %}
       supplier: 'Organization: {{ s }}'
       {% endfor %}
-      downloadLocation: {{ TODO }} # Does not work right now
+      downloadLocation: {{ purl | unwrap | func(name="purl_to_download_location") }}
       packageFileName: {{ TODO }} # Does not work right now
       licenseDeclared: {{ licenses | unwrap }}
       externalRefs:
@@ -267,7 +311,7 @@ chunks:
     secondData: |-
       name: {{ name | unwrap }}
       bom-ref: {{ spdxid | unwrap | func(name="spdxid_to_bom_ref", purls=purls) }}
-      purl: {{ purls | unwrap }}
+      purl: {{ purls | unwrap | func(name="purl_with_download_location", download_location_var=download_location) }}
       type: {{ purls | unwrap | func(name="purl_to_component_type") }}
       version: {{ version_info | unwrap }}
       supplier:
@@ -285,7 +329,7 @@ chunks:
         identity:
         {% for purl in purls | slice(start=1) %}
           - field: purl
-            concludedValue: "{{ purl }}"
+            concludedValue: "{{ purl | func(name="purl_with_download_location", download_location_var=download_location) }}"
         {% endfor %}
         {% for cpe in cpes %}
           - field: cpe
@@ -296,11 +340,6 @@ chunks:
         - alg: {{ hash.algorithm | func(name="hash_alg_from_spdx_to_cdx") }}
           content: {{ hash.checksumValue }}
       {% endfor %}
-      pedigree:
-        ancestors:
-          {% for ancestor in TODO %}
-            - {{ ancestor }}
-          {% endfor %}
 
   - name: RPM midstream relationships
     firstVariables:
@@ -311,7 +350,7 @@ chunks:
     firstFieldPath: relationships[relatedSpdxElement=${rpm_midstream_packages_spdxids},relationshipType=CONTAINS]
     firstData: |-
       {% for midstream in midstreams %}
-      - spdxElementId: {{ srpm_bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=srpm_name ) }}
+      - spdxElementId: {{ srpm_bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=srpm_name) }}
         relationshipType: CONTAINS
         relatedSpdxElement: {{ midstream['bom-ref'] | func(name="bom_ref_to_spdxid", component_name_var=midstream.name) }}
       {% endfor %}
@@ -337,12 +376,14 @@ chunks:
         fieldPath: '@.versionInfo'
       - name: hashes
         fieldPath: '@.checksums[|]'
+      - name: download_location
+        fieldPath: '@.downloadLocation'
     firstFieldPath: packages[SPDXID=${rpm_midstream_packages_spdxids}]
     firstData: |-
       SPDXID: {{ bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=name) }}
       name: {{ name | unwrap }}
       versionInfo: {{ version | unwrap }}
-      downloadLocation: {{ TODO }}
+      downloadLocation: {{ purls | unwrap | func(name="purl_to_download_location") }}
       packageFileName: {{ TODO }}
       checksums:
       {% for hash in hashes %}
@@ -373,7 +414,7 @@ chunks:
       type: {{ purls | unwrap | func(name="purl_to_component_type") }}
       name: {{ name | unwrap }}
       version: {{ version | unwrap }}
-      purl: {{ purls | unwrap }}
+      purl: {{ purls | unwrap | func(name="purl_with_download_location", download_location_var=download_location) }}
       hashes:
       {% for hash in hashes %}
         - alg: {{ hash.algorithm | func(name="hash_alg_from_spdx_to_cdx") }}
@@ -410,12 +451,14 @@ chunks:
         fieldPath: '@.versionInfo'
       - name: hashes
         fieldPath: '@.checksums[|]'
+      - name: download_location
+        fieldPath: '@.downloadLocation'
     firstFieldPath: packages[SPDXID=${rpm_upstream_packages_spdxids}]
     firstData: |-
       SPDXID: {{ bom_ref | unwrap | func(name="bom_ref_to_spdxid", component_name_var=name) }}
       name: {{ name | unwrap }}
       versionInfo: {{ version | unwrap }}
-      downloadLocation: {{ TODO }}
+      downloadLocation: {{ purls | unwrap | func(name="purl_to_download_location") }}
       packageFileName: {{ TODO }}
       checksums:
       {% for hash in hashes %}
@@ -446,9 +489,14 @@ chunks:
       type: {{ purls | unwrap | func(name="purl_to_component_type") }}
       name: {{ name | unwrap }}
       version: {{ version | unwrap }}
-      purl: {{ purls | unwrap }}
+      purl: {{ purls | unwrap | func(name="purl_with_download_location", download_location_var=download_location) }}
       hashes:
       {% for hash in hashes %}
         - alg: {{ hash.algorithm | func(name="hash_alg_from_spdx_to_cdx") }}
           content: {{ hash.checksumValue }}
       {% endfor %}
+
+secondPostprocessing:
+  - deduplicate_srpm_midstreams
+  - deduplicate_srpm_upstreams
+  - merge_dependencies

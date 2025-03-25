@@ -45,6 +45,11 @@ properties:
         - firstFieldPath
         - secondFieldPath
       additionalProperties: false
+  firstPostprocessing:
+    $ref: "#/$defs/postprocessing"
+  secondPostprocessing:
+    $ref: "#/$defs/postprocessing"
+
 additionalProperties: false
 required:
   - first
@@ -68,3 +73,8 @@ $defs:
         - fieldPath
       additionalProperties: false
     description: Variables are populated from the other format.
+  postprocessing:
+    type: array
+    items:
+      type: string
+    additionalProperties: false
