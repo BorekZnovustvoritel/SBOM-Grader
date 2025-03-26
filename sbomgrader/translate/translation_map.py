@@ -61,8 +61,8 @@ class Chunk:
         name: str,
         first_format: SBOMFormat,
         second_format: SBOMFormat,
-        first_data: Data,
-        second_data: Data,
+        first_data: Data | None,
+        second_data: Data | None,
         first_field_path: str,
         second_field_path: str,
         first_variables: dict[str, Variable] = None,
@@ -134,6 +134,9 @@ class Chunk:
         appender_resolver = self.resolver_for(convert_to)
         append_path = self.field_path_for(convert_to)
         relevant_data = self.data_for(convert_to)
+        if not relevant_data:
+            # This chunk does not specify anything for this direction
+            return
         for chunk_occurrence in self.occurrences(orig_doc):
             rendered_data = relevant_data.render(orig_doc, chunk_occurrence)
             if not should_remove(rendered_data):
@@ -195,13 +198,14 @@ class TranslationMap:
             second_vars = {**second_glob_var_initialized}
             second_vars.update(second_variables)
 
-            first_data = Data(
-                chunk_dict["firstData"], second_vars, second_transformer_file
-            )
-            second_data = Data(
-                chunk_dict["secondData"], first_vars, first_transformer_file
-            )
-
+            if first_data_dict := chunk_dict.get("firstData"):
+                first_data = Data(first_data_dict, second_vars, second_transformer_file)
+            else:
+                first_data = None
+            if second_data_dict := chunk_dict.get("secondData"):
+                second_data = Data(second_data_dict, first_vars, first_transformer_file)
+            else:
+                second_data = None
             chunk = Chunk(
                 name,
                 first,
