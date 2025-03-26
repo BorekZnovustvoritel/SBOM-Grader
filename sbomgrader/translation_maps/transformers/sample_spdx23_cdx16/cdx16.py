@@ -4,6 +4,7 @@ import urllib.parse
 import uuid
 
 from packageurl import PackageURL
+from spdx_tools.spdx.model.spdx_no_assertion import SPDX_NO_ASSERTION_STRING
 
 from sbomgrader.core.definitions import FIELD_NOT_PRESENT
 from sbomgrader.translation_maps.transformers.sample_spdx23_cdx16.utils import (
@@ -59,6 +60,8 @@ def cpe_to_cpe_type(cpe: str) -> str:
 
 
 def purl_to_download_location(purl: str) -> str:
+    if not purl or not isinstance(purl, str):
+        return SPDX_NO_ASSERTION_STRING
     purl_obj = PackageURL.from_string(purl)
-    loc = purl_obj.qualifiers.get("download_url") or "NOASSERTION"
+    loc = purl_obj.qualifiers.get("download_url") or SPDX_NO_ASSERTION_STRING
     return loc

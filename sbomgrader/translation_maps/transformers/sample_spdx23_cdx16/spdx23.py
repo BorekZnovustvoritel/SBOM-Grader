@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from packageurl import PackageURL
+from spdx_tools.spdx.model.spdx_no_assertion import SPDX_NO_ASSERTION_STRING
 
 from sbomgrader.core.definitions import FIELD_NOT_PRESENT
 from sbomgrader.translation_maps.transformers.sample_spdx23_cdx16.utils import (
@@ -87,11 +88,13 @@ def annotations_to_properties(annotations: list[str]) -> list[dict[str, str]]:
 
 
 def purl_with_download_location(purl: str, download_location_var: list[str]) -> str:
+    if not purl or not isinstance(purl, str):
+        return FIELD_NOT_PRESENT
     purl_obj = PackageURL.from_string(purl)
     if "download_url" in purl_obj.qualifiers:
         return purl
-    download_location = next(iter(download_location_var), "NOASSERTION")
-    if download_location == "NOASSERTION":
+    download_location = next(iter(download_location_var), SPDX_NO_ASSERTION_STRING)
+    if download_location == SPDX_NO_ASSERTION_STRING:
         return purl
     purl_obj.qualifiers["download_url"] = download_location
     return purl_obj.to_string()

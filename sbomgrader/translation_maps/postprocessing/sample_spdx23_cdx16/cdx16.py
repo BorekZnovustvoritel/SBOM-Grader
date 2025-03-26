@@ -117,15 +117,19 @@ def deduplicate_srpm_upstreams(
 def merge_dependencies(_, new_doc: dict[str, Any]) -> None:
     if "dependencies" not in new_doc:
         return
-    new_dependencies = {}
+    new_dependencies = []
     for dep in new_doc.get("dependencies", []):
         dep_ref = dep["ref"]
-        if dep_ref not in new_dependencies:
-            new_dependencies[dep_ref] = {}
+        dep_obj = next(
+            filter(lambda x: x.get("ref") == dep_ref, new_dependencies), None
+        )
+        if not dep_obj:
+            dep_obj = {"ref": dep_ref}
+            new_dependencies.append(dep_obj)
         for key in "provides", "dependsOn":
             item_list = dep.get(key)
-            if item_list and key not in new_dependencies[dep_ref]:
-                new_dependencies[dep_ref][key] = []
+            if item_list and key not in dep_obj:
+                dep_obj[key] = []
             if item_list:
-                new_dependencies[dep_ref][key].extend(item_list)
+                dep_obj[key].extend(item_list)
     new_doc["dependencies"] = new_dependencies
