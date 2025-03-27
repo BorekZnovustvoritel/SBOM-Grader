@@ -133,3 +133,17 @@ def merge_dependencies(_, new_doc: dict[str, Any]) -> None:
             if item_list:
                 dep_obj[key].extend(item_list)
     new_doc["dependencies"] = new_dependencies
+
+
+def clone_main_component(_, new_doc: dict[str, Any]) -> None:
+    resolver = FieldResolver({})
+    main_bom_ref = next(
+        iter(resolver.get_objects(new_doc, "metadata.component.bom-ref")), None
+    )
+    if not main_bom_ref:
+        return
+    main_component = next(
+        iter(resolver.get_objects(new_doc, f"components[bom-ref={main_bom_ref}]")), None
+    )
+    if main_component:
+        new_doc["metadata"]["component"] = main_component

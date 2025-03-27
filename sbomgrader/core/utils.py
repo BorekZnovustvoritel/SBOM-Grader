@@ -101,7 +101,7 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
     def sliced(
         list_: list[Any] | str, start: int = 0, end: int = None
     ) -> list[Any] | str:
-        if not isinstance(list_, list) or not isinstance(list_, str):
+        if not isinstance(list_, list) and not isinstance(list_, str):
             return []
         return list_[start:end]
 

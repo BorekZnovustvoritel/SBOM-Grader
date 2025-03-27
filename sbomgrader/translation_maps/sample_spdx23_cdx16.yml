@@ -82,17 +82,21 @@ chunks:
       - name: creation_time
         fieldPath: metadata.timestamp
       - name: tools
-        fieldPath: metadata.tools[|]
+        fieldPath: metadata.?.tools.?.components[|]
+      - name: tools_backup
+        fieldPath: metadata.?.tools[|]
       - name: supplier
         fieldPath: metadata.supplier.name
       - name: component_supplier
-        fieldPath: metadata.component.supplier.name
+        fieldPath: metadata.component.?.supplier.?.name
       - name: supplier_urls
         fieldPath: metadata.supplier.url[|]
       - name: component_supplier_urls
-        fieldPath: metadata.component.supplier.url[|]
+        fieldPath: metadata.component.?.supplier.?.url[|]
       - name: serial_number
         fieldPath: serialNumber
+      - name: main_component_version
+        fieldPath: metadata.component.?.version
     firstData: >-
       spdxVersion: "SPDX-2.3"
 
@@ -106,9 +110,11 @@ chunks:
 
         creators:
 
-          {% for tool in tools %}
+          {% for tool in tools | fallback(tools_backup) %}
 
-          - "Tool: {{ tool.name }} {{ tool.version }}"
+          {% set tool_str = tool.name ~ ' ' ~ tool.version %}
+
+          - "Tool: {{ tool_str | trim }}"
 
           {% endfor %}
 
@@ -122,7 +128,10 @@ chunks:
 
         licenseListVersion: "3.25"
 
-      name: {{ main_element_name | unwrap }}
+      {% set bom_name = main_element_name |
+      unwrap ~ ' ' ~ main_component_version | unwrap %}
+
+      name: {{ bom_name | trim }}
 
       documentNamespace: {{ supplier_urls | unwrap |
       func(name="url_to_namespace",
@@ -183,11 +192,19 @@ chunks:
 
         tools:
 
-        {% for tool in tools %}
+          components:
 
-          - {{ tool | func(name="tool_to_dict") }}
+          {% for tool in tools %}
 
-        {% endfor %}
+          {% set tool_obj = tool | func(name="tool_to_dict") %}
+
+            - name: {{ tool_obj.name }}
+
+              version: {{ tool_obj.version }}
+
+              type: application
+
+          {% endfor %}
     secondFieldPath: .
 
 
@@ -247,9 +264,9 @@ chunks:
       {% for related in bom_ref_second_side_list %}
 
       - spdxElementId: {{ related | func(name="bom_ref_to_spdxid",
-      component_name_var=second_element_name) }},
+      component_name_var=second_element_name) }}
 
-        relationshipType: PACKAGE_OF,
+        relationshipType: PACKAGE_OF
 
         relatedSpdxElement: {{ bom_ref_first_side | unwrap |
       func(name="bom_ref_to_spdxid",
@@ -365,14 +382,16 @@ chunks:
         fieldPath: '@.?.versionInfo'
       - name: licenses
         fieldPath: '@.?.licenseDeclared'
+      - name: licenses_backup
+        fieldPath: '@.?.licenseConcluded'
       - name: cpes
         fieldPath: '@.?.externalRefs[?.referenceType%=cpe]?.referenceLocator'
       - name: annotation_comments
         fieldPath: '@.?.annotations[?.annotationType=OTHER]?.comment'
       - name: hashes
-        fieldPath: '@.checksums[|]'
+        fieldPath: '@.?.checksums[|]'
       - name: download_location
-        fieldPath: '@.downloadLocation'
+        fieldPath: '@.?.downloadLocation'
 
     firstData: >-
       SPDXID: {{ bom_ref | unwrap |
@@ -459,23 +478,23 @@ chunks:
       - name: name
         fieldPath: '@.name'
       - name: version
-        fieldPath: '@.version'
+        fieldPath: '@.?.version'
       - name: supplier_name
         fieldPath: '@.?.supplier.?.name'
       - name: publisher
-        fieldPath: '@.publisher'
+        fieldPath: '@.?.publisher'
       - name: licenses
-        fieldPath: '@.licenses[|]license.name'
+        fieldPath: '@.?.licenses[|]license.name'
       - name: purl
-        fieldPath: '@.purl'
+        fieldPath: '@.?.purl'
       - name: hashes
-        fieldPath: '@.hashes'
+        fieldPath: '@.?.hashes[|]'
       - name: properties
-        fieldPath: '@.properties[|]'
+        fieldPath: '@.?.properties[|]'
       - name: additional_purls
-        fieldPath: '@.evidence.identity[field=purl]concludedValue'
+        fieldPath: '@.?.evidence.?.identity[field=purl]concludedValue'
       - name: cpes
-        fieldPath: '@.evidence.identity[field=cpe]concludedValue'
+        fieldPath: '@.?.evidence.?.identity[field=cpe]concludedValue'
     secondData: >-
       name: {{ name | unwrap }}
 
@@ -496,7 +515,7 @@ chunks:
 
       licenses:
 
-      {% for license in licenses %}
+      {% for license in licenses | fallback(licenses_backup) %}
 
         - license:
 
@@ -635,7 +654,7 @@ chunks:
       - name: version
         fieldPath: '@.?.version'
       - name: hashes
-        fieldPath: '@.?.hashes'
+        fieldPath: '@.?.hashes[|]'
       - name: purls
         fieldPath: '@.?.purl'
     secondFieldPath: >-
@@ -749,7 +768,7 @@ chunks:
       - name: version
         fieldPath: '@.?.version'
       - name: hashes
-        fieldPath: '@.?.hashes'
+        fieldPath: '@.?.hashes[|]'
       - name: purls
         fieldPath: '@.?.purl'
     secondFieldPath: >-
@@ -779,7 +798,11 @@ chunks:
 
       {% endfor %}
 
+firstPostprocessing:
+  - set_relationships_last
+
 secondPostprocessing:
   - deduplicate_srpm_midstreams
   - deduplicate_srpm_upstreams
   - merge_dependencies
+  - clone_main_component

@@ -56,14 +56,14 @@ def namespaces_to_url(namespaces: list[str]) -> list[str]:
 def sanitise_supplier(supplier: str) -> str:
     if not isinstance(supplier, str):
         return FIELD_NOT_PRESENT
-    return re.sub(r"^\w+:\s", "", supplier, 1)
+    return re.sub(r"^\w+:\s", "", supplier, count=1)
 
 
 def tool_to_dict(tool_string: str) -> dict[str, str]:
     if not isinstance(tool_string, str):
         return FIELD_NOT_PRESENT
     tool_string = tool_string.strip()
-    tool_string = re.sub(r"Tool: ", "", tool_string, 1, re.IGNORECASE)
+    tool_string = re.sub(r"Tool: ", "", tool_string, flags=re.IGNORECASE, count=1)
 
     splits = tool_string.rsplit(" ", 1)
     if len(splits) == 2 and re.search(r"\d", splits[1]):
