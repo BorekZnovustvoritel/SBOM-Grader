@@ -117,7 +117,7 @@ class PathParser:
             raise TypeError(
                 f"Cannot compare PathParser to object of type {type(other)}"
             )
-        return self._path == other._path
+        return self.parse() == other.parse()
 
     @property
     def raw_path(self) -> str:
@@ -146,7 +146,7 @@ class QueryParser:
             raise TypeError(
                 f"Cannot compare QueryParser to object of type {type(other)}"
             )
-        return str(self._path) == str(other._path)
+        return self.parse() == other.parse()
 
     def parse(self, relative_path_index: str | None = None) -> list[Query]:
         """Parse the query. If required, replaces the relative symbol '@' with the provided index."""

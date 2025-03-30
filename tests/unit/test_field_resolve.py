@@ -32,6 +32,42 @@ def test_path_parser(path: str, relative_path: str, output: list[Union]):
 
 
 @pytest.mark.parametrize(
+    ["path"],
+    [
+        ("hello.foo[bar=1,spam!=2]ham",),
+        ("hello . foo [bar =1, spam !=2] ham",),
+        (".hello.foo.[.bar.=1,.spam.!=2].ham",),
+        (" . hello . foo . [ . bar . =1, . spam . !=2] . ham",),
+        ("..hello..foo..[..bar..=1,..spam..!=2]..ham",),
+    ],
+)
+def test_path_parser_unambiguity(path: str):
+    assert PathParser(path).parse() == [
+        "hello",
+        "foo",
+        QueryParser("bar=1,spam!=2"),
+        "ham",
+    ]
+
+
+@pytest.mark.parametrize(
+    ["query_str"],
+    [
+        ("bar=1,spam!=2",),
+        ("bar =1, spam !=2",),
+        (".bar.=1,.spam.!=2",),
+        (" . bar . =1, . spam . !=2",),
+        ("..bar..=1,..spam..!=2",),
+    ],
+)
+def test_query_parser_unambiguity(query_str: str):
+    assert QueryParser(query_str).parse() == [
+        Query(QueryType.EQ, value="1", field_path=PathParser("bar")),
+        Query(QueryType.NEQ, value="2", field_path=PathParser("spam")),
+    ]
+
+
+@pytest.mark.parametrize(
     ["path", "document", "output"],
     [
         (
