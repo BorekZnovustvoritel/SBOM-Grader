@@ -169,8 +169,6 @@ chunks:
 
           name: {{ main_element_name | unwrap }}
 
-          publisher: {{ creationOrg | unwrap | slice(start=13) }}
-
           purl: {{ main_element_purls | unwrap }}
 
           type: {{ main_element_purls | unwrap |
@@ -186,7 +184,7 @@ chunks:
           {% for url in document_namespace |
       func(name="namespaces_to_url") %}
 
-            - {{ url }}
+            - "{{ url }}"
 
           {% endfor %}
 
@@ -380,9 +378,9 @@ chunks:
         fieldPath: '@.?.externalRefs[?.referenceType=purl]?.referenceLocator'
       - name: version_info
         fieldPath: '@.?.versionInfo'
-      - name: licenses
+      - name: licenses_declared
         fieldPath: '@.?.licenseDeclared'
-      - name: licenses_backup
+      - name: licenses_concluded
         fieldPath: '@.?.licenseConcluded'
       - name: cpes
         fieldPath: '@.?.externalRefs[?.referenceType%=cpe]?.referenceLocator'
@@ -412,7 +410,11 @@ chunks:
 
       packageFileName: {{ TODO }} # Does not work right now
 
-      licenseDeclared: {{ licenses | unwrap }}
+      licenseDeclared: {{ licenses_declared  |
+      fallback(licenses_declared_fallback) | unwrap }}
+
+      licenseConcluded: {{ licenses_concluded  |
+      fallback(licenses_concluded_fallback) | unwrap }}
 
       externalRefs:
 
@@ -483,8 +485,19 @@ chunks:
         fieldPath: '@.?.supplier.?.name'
       - name: publisher
         fieldPath: '@.?.publisher'
-      - name: licenses
-        fieldPath: '@.?.licenses[|]license.name'
+      - name: licenses_declared
+        fieldPath: >-
+          @.?.licenses[license.?.acknowledgement=declared]license.?.id
+      - name: licenses_declared_fallback
+        fieldPath: >-
+          @.?.licenses[license.?.acknowledgement=declared,id=FIELD_NOT_PRESENT]
+          license.?.name
+      - name: licenses_concluded
+        fieldPath: '@.?.licenses[license.acknowledgement!=declared]license.?.id'
+      - name: licenses_concluded_fallback
+        fieldPath: >-
+          @.?.licenses[license.acknowledgement!=declared,id=FIELD_NOT_PRESENT]
+          license.?.name
       - name: purl
         fieldPath: '@.?.purl'
       - name: hashes
@@ -515,11 +528,21 @@ chunks:
 
       licenses:
 
-      {% for license in licenses | fallback(licenses_backup) %}
+      {% for license in licenses_declared %}
 
         - license:
 
-            name: {{ license }}
+            id: {{ license }}
+            acknowledgement: declared
+
+      {% endfor %}
+
+      {% for license in licenses_concluded %}
+
+        - license:
+
+            id: {{ license }}
+            acknowledgement: concluded
 
       {% endfor %}
 
@@ -805,4 +828,6 @@ secondPostprocessing:
   - deduplicate_srpm_midstreams
   - deduplicate_srpm_upstreams
   - merge_dependencies
+  - resolve_types
+  - try_to_restore_org_urls
   - clone_main_component

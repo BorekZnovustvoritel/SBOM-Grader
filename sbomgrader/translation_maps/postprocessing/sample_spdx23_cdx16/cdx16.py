@@ -1,6 +1,6 @@
 from typing import Any
 
-from sbomgrader.core.field_resolve import FieldResolver, Variable
+from sbomgrader.core.field_resolve import FieldResolver, Variable, PathParser
 from sbomgrader.translate.prune import prune
 from sbomgrader.translation_maps.transformers.sample_spdx23_cdx16.spdx23 import (
     spdxid_to_bom_ref,
@@ -135,6 +135,33 @@ def merge_dependencies(_, new_doc: dict[str, Any]) -> None:
     new_doc["dependencies"] = new_dependencies
 
 
+def resolve_types(_, new_doc: dict[str, Any]) -> None:
+    resolver = FieldResolver({})
+    for component in resolver.get_objects(new_doc, "components[|]", {}):
+        if "type" in component:
+            continue
+        cpes = resolver.get_objects(
+            component, "?.evidence.identity[field=cpe]concludedValue"
+        )
+        if cpes:
+            component["type"] = "operating-system"
+        else:
+            # Some reasonable fallback
+            component["type"] = "data"
+
+
+def try_to_restore_org_urls(_, new_doc: dict[str, Any]) -> None:
+    main_supp = new_doc.get("metadata", {}).get("supplier", {})
+    main_supp_name = main_supp.get("name")
+    main_supp_url = main_supp.get("url")
+    if not main_supp_name or not main_supp_url:
+        return
+    for component in new_doc.get("components", []):
+        supp = component.get("supplier")
+        if supp and supp.get("name") == main_supp_name:
+            supp["url"] = main_supp_url
+
+
 def clone_main_component(_, new_doc: dict[str, Any]) -> None:
     resolver = FieldResolver({})
     main_bom_ref = next(
@@ -146,4 +173,4 @@ def clone_main_component(_, new_doc: dict[str, Any]) -> None:
         iter(resolver.get_objects(new_doc, f"components[bom-ref={main_bom_ref}]")), None
     )
     if main_component:
-        new_doc["metadata"]["component"] = main_component
+        new_doc["metadata"]["component"].update(main_component)

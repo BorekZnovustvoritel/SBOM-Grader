@@ -28,6 +28,8 @@ VAR_REF_REGEX = r"\${(?P<var_id>[^}]+)}"
 
 
 class __FieldNotPresent:
+    string_repr = "FIELD_NOT_PRESENT"
+
     def __repr__(self):
         return "Field not present."
 

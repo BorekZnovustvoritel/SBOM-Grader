@@ -93,7 +93,12 @@ def test_query_parser_unambiguity(query_str: str):
                     "dependsOn": [],
                 }
             ],
-        )
+        ),
+        (
+            "foo[bar=FIELD_NOT_PRESENT]",
+            {"foo": [{"bar": 1}, {"spam": 2}]},
+            [{"spam": 2}],
+        ),
     ],
 )
 def test_fetch_fields(path, document, output):

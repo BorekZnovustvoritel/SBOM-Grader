@@ -132,7 +132,11 @@ class Query:
 
     @property
     def variable(self) -> str | None:
-        if self.value and (match := re.match(r"^\$\{(?P<varname>\w+)}$", self.value)):
+        if (
+            self.value
+            and isinstance(self.value, str)
+            and (match := re.match(r"^\$\{(?P<varname>\w+)}$", self.value))
+        ):
             return match.group("varname")
 
 
@@ -219,11 +223,18 @@ class QueryParser:
                 query = Query(
                     type_=QueryType(operation_buffer.strip()),
                     field_path=PathParser(field_buffer.strip()),
-                    value=value_buffer.strip(),
+                    value=self._load_val(value_buffer),
                 )
             queries.append(query)
         self.ans[relative_path_index] = queries
         return queries
+
+    @staticmethod
+    def _load_val(value: str) -> Any:
+        stripped_val = value.strip()
+        if stripped_val == FIELD_NOT_PRESENT.string_repr:
+            return FIELD_NOT_PRESENT
+        return stripped_val
 
     def __repr__(self):
         return str(self._path)
@@ -397,9 +408,7 @@ class FieldResolver:
 
         if not accept_not_present_field and doc_ is FIELD_NOT_PRESENT:
             raise FieldNotPresentError("Field not present: ", path_tried)
-        if doc_ is FIELD_NOT_PRESENT:
-            return
-        if not path:
+        if not path or doc_ is FIELD_NOT_PRESENT:
             # The path has ended
             try:
                 resp = func_to_run(doc_)
@@ -480,12 +489,12 @@ class FieldResolver:
                         if varname:
                             func = lambda x: x in variable_values[varname]
                         else:
-                            func = lambda x: str(x) == query.value
+                            func = lambda x: x == query.value
                     elif query.type_ is QueryType.NEQ:
                         if varname:
                             func = lambda x: x not in variable_values[varname]
                         else:
-                            func = lambda x: str(x) != query.value
+                            func = lambda x: x != query.value
                     elif query.type_ is QueryType.STARTSWITH:
                         if varname:
                             func = lambda x: isinstance(x, str) and any(

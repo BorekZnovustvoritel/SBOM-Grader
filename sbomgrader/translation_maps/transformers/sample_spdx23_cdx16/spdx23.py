@@ -3,6 +3,7 @@ import re
 import uuid
 from typing import Any
 
+import yaml
 from packageurl import PackageURL
 from spdx_tools.spdx.model.spdx_no_assertion import SPDX_NO_ASSERTION_STRING
 
@@ -77,7 +78,7 @@ def annotations_to_properties(annotations: list[str]) -> list[dict[str, str]]:
     ans = []
     for annotation in annotations:
         try:
-            dic = json.loads(annotation)
+            dic = yaml.safe_load(annotation)
             tmp = {}
             for key, value in dic.items():
                 tmp.update({"name": key, "value": value})
