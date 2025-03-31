@@ -45,7 +45,7 @@ firstVariables:
 
 secondVariables:
   - name: main_element_bom_ref
-    fieldPath: ?.components[name=${main_element_name}]bom-ref
+    fieldPath: metadata.component.bom-ref
   - name: main_element_name
     fieldPath: metadata.component.name
   - name: srpm_components_bom_refs
@@ -73,7 +73,7 @@ chunks:
       - name: creationOrg
         fieldPath: 'creationInfo.creators[.%=Organization: ]'
       - name: main_element_supplier_name
-        fieldPath: packages[SPDXID=${main_element_spdxid}]supplier
+        fieldPath: packages[SPDXID=${main_element_spdxid}]?.supplier
       - name: document_namespace
         fieldPath: documentNamespace
       - name: tools
@@ -399,7 +399,17 @@ chunks:
 
       versionInfo: {{ version | unwrap }}
 
-      {% for s in supplier_name | fallback(publisher) %}
+      {% if bom_ref == main_element_bom_ref %}
+
+          {% set fallback_supplier = main_element_supplier %}
+
+      {% else %}
+
+          {% set fallback_supplier = [] %}
+
+      {% endif %}
+
+      {% for s in supplier_name | fallback(publisher, fallback_supplier) %}
 
       supplier: 'Organization: {{ s }}'
 
@@ -508,6 +518,8 @@ chunks:
         fieldPath: '@.?.evidence.?.identity[field=purl]concludedValue'
       - name: cpes
         fieldPath: '@.?.evidence.?.identity[field=cpe]concludedValue'
+      - name: main_element_supplier
+        fieldPath: metadata.supplier.name
     secondData: >-
       name: {{ name | unwrap }}
 

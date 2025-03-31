@@ -1,4 +1,3 @@
-import json
 import re
 import uuid
 from typing import Any
@@ -39,7 +38,11 @@ def purl_to_component_type(purl: str) -> str | None | FIELD_NOT_PRESENT.__class_
         return FIELD_NOT_PRESENT
     if purl.startswith("pkg:oci/"):
         return "container"
-    if purl.startswith("pkg:rpm/") or purl.startswith("pkg:maven/"):
+    if (
+        purl.startswith("pkg:rpm/")
+        or purl.startswith("pkg:maven/")
+        or purl.startswith("pkg:generic/")
+    ):
         return "library"
     return FIELD_NOT_PRESENT
 
