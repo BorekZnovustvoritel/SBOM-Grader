@@ -1,8 +1,8 @@
 from typing import Any
 
-from sbomgrader.core.field_resolve import FieldResolver, Variable, PathParser
+from sbomgrader.core.field_resolve import FieldResolver, Variable
 from sbomgrader.translate.prune import prune
-from sbomgrader.translation_maps.transformers.sample_spdx23_cdx16.spdx23 import (
+from sbomgrader.translation_maps.transformers.red_hat_spdx23_cdx16.spdx23 import (
     spdxid_to_bom_ref,
 )
 

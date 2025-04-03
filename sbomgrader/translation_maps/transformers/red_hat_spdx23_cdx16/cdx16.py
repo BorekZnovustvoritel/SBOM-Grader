@@ -7,7 +7,7 @@ from packageurl import PackageURL
 from spdx_tools.spdx.model.spdx_no_assertion import SPDX_NO_ASSERTION_STRING
 
 from sbomgrader.core.definitions import FIELD_NOT_PRESENT
-from sbomgrader.translation_maps.transformers.sample_spdx23_cdx16.utils import (
+from sbomgrader.translation_maps.transformers.red_hat_spdx23_cdx16.utils import (
     SPDX_CDX_HASHES,
 )
 
