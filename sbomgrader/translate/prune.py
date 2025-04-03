@@ -7,6 +7,7 @@ from sbomgrader.core.definitions import FIELD_NOT_PRESENT, TIME_ISO_FORMAT_STRIN
 def should_remove(item: Any) -> bool:
     return (
         item is None
+        or item == ""
         or (isinstance(item, list) and not len(item))
         or (isinstance(item, dict) and not item)
         or item is FIELD_NOT_PRESENT

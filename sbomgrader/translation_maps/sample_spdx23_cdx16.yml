@@ -198,7 +198,7 @@ chunks:
 
             - name: {{ tool_obj.name }}
 
-              version: {{ tool_obj.version }}
+              version: "{{ tool_obj.version }}"
 
               type: application
 
@@ -397,7 +397,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      versionInfo: {{ version | unwrap }}
+      versionInfo: "{{ version | unwrap }}"
 
       {% if bom_ref == main_element_bom_ref %}
 
@@ -532,7 +532,7 @@ chunks:
 
       type: {{ purls | unwrap | func(name="purl_to_component_type") }}
 
-      version: {{ version_info | unwrap }}
+      version: "{{ version_info | unwrap }}"
 
       supplier:
 
@@ -651,7 +651,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      versionInfo: {{ version | unwrap }}
+      versionInfo: "{{ version | unwrap }}"
 
       downloadLocation: {{ purls | unwrap |
       func(name="purl_to_download_location") }}
@@ -703,7 +703,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      version: {{ version | unwrap }}
+      version: "{{ version | unwrap }}"
 
       purl: {{ purls | unwrap | func(name="purl_with_download_location",
       download_location_var=download_location) }}
@@ -766,7 +766,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      versionInfo: {{ version | unwrap }}
+      versionInfo: "{{ version | unwrap }}"
 
       downloadLocation: {{ purls | unwrap |
       func(name="purl_to_download_location") }}
@@ -817,7 +817,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      version: {{ version | unwrap }}
+      version: "{{ version | unwrap }}"
 
       purl: {{ purls | unwrap |
       func(name="purl_with_download_location",
