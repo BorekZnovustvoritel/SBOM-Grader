@@ -35,10 +35,10 @@ def test_path_parser(path: str, relative_path: str, output: list[Union]):
     ["path"],
     [
         ("hello.foo[bar=1,spam!=2]ham",),
-        ("hello . foo [bar =1, spam !=2] ham",),
-        (".hello.foo.[.bar.=1,.spam.!=2].ham",),
-        (" . hello . foo . [ . bar . =1, . spam . !=2] . ham",),
-        ("..hello..foo..[..bar..=1,..spam..!=2]..ham",),
+        ("hello . foo [bar =1, spam != 2 ] ham",),
+        (".hello.foo.[.bar.=1,.spam.!= 2 ].ham",),
+        (" . hello . foo . [ . bar . =1, . spam . != 2] . ham",),
+        ("..hello..foo..[..bar..=1,..spam..!=2 ]..ham",),
     ],
 )
 def test_path_parser_unambiguity(path: str):
