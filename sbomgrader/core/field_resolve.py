@@ -1,9 +1,9 @@
 import re
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Union, Any, Callable
 
-from black.trans import defaultdict
 
 from sbomgrader.core.definitions import (
     FIELD_NOT_PRESENT,
@@ -272,15 +272,6 @@ class Variable:
         return f"<{self.__class__.__name__}, name: {self.name}, field_path: {self.raw_field_path}>"
 
 
-class VariableRef:
-    def __init__(self, identifier: str):
-        self.original_identifier = identifier
-        self.name: str = identifier
-
-    def __hash__(self):
-        return self.original_identifier.__hash__()
-
-
 class FieldResolver:
 
     def __init__(self, variables: dict[str, Variable]):
@@ -311,6 +302,7 @@ class FieldResolver:
         self,
         whole_doc: dict[str, Any],
         path_to_instance: str | None = None,
+        already_resolved_variables: dict[str, list[Any]] = None,
         warning_on: bool = True,
     ) -> dict[str, list[Any]]:
         """
@@ -318,22 +310,32 @@ class FieldResolver:
         Without the argument `path_to_instance` this method cannot resolve relative variables
         nor absolute variables relying on relative ones.
         """
+        already_resolved_variables = already_resolved_variables or {}
         # first resolve dependency tree for variables
         dependencies = {}
         if path_to_instance:
             vars_to_resolve = self._uninitialized_vars
         else:
             vars_to_resolve = self.absolute_variables
+        vars_to_resolve = {
+            k: v
+            for k, v in vars_to_resolve.items()
+            if k not in already_resolved_variables
+        }
         for variable in vars_to_resolve.values():
-            dependencies[variable.name] = set()
-            dependencies[variable.name].update(
-                VariableRef(match.group("var_id")).name
+            depends_on_vars = {
+                match.group("var_id")
                 for match in re.finditer(VAR_REF_REGEX, variable.raw_field_path)
-            )
+            }
+            dependencies[variable.name] = {
+                varname
+                for varname in depends_on_vars
+                if varname not in already_resolved_variables
+            }
             assert (
                 variable.name not in dependencies[variable.name]
             ), f"Self referencing variable {variable.name} found."
-        resolved_variables: dict[str, list] = {}
+        resolved_variables: dict[str, list] = {**already_resolved_variables}
         while not all(var_name in resolved_variables for var_name in dependencies):
             # Get a var with no dependencies
             var_name, var_deps = sorted(dependencies.items(), key=lambda x: len(x[1]))[
@@ -345,9 +347,11 @@ class FieldResolver:
                 # Cannot resolve absolute variable referencing a relative one
                 dependencies.pop(var_name)
                 continue
-            assert (
-                not var_deps
-            ), f"Circular variable reference found for variable {var_name}"
+            assert not var_deps, (
+                f"Circular variable reference found for variable {var_name}. "
+                f"Needs to resolve: {dependencies[var_name]}. "
+                f"Already resolved: {set(resolved_variables.keys())}"
+            )
 
             resolved_variables[var_name] = []
 
@@ -583,7 +587,7 @@ class FieldResolver:
 
     @staticmethod
     def __parse_field_path(
-        field_path: str | list[Union[str, QueryParser]]
+        field_path: str | list[Union[str, QueryParser]],
     ) -> list[Union[str, QueryParser]]:
         return (
             field_path
