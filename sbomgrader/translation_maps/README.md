@@ -89,6 +89,25 @@ first package, the value will be equal to the list containing the value from pat
 `packages[0].SPDXID`, for the second package, the value list will only contain the
 value from `packages[1].SPDXID` and so on.
 
+---
+
+There is also an option to specify relative path at a lower level (it only shares a
+portion of the path with the chunk location).
+
+**Example:**
+```yaml
+---
+...
+chunks:
+  - name: packages_purls
+    firstFieldPath: packages[|]externalRefs[referenceType=purl]referenceLocator
+    firstVariables:
+      - name: package_spdxid
+        fieldPath: 'packages[@]SPDXID'
+```
+
+This way it is possible to create a chunk for each purl while also keeping
+track of the SPDXID of the package which this purl is associated to.
 
 ### Data
 
@@ -128,6 +147,23 @@ In `secondData` of a sample chunk, we can now use the following expression:
 {{ bar | func(name="last") }}
 ```
 which will resolve into the last value of the variable `bar`.
+
+More information about transformation functions is located [here](transformers/README.md).
+There have also been added these Jinja2 filters:
+
+- `unwrap`
+  - Unwraps a list, returns the first value of the list. In case of a problem, returns an empty string instead.
+- `slice`
+  - Slices a list or a string. Takes 2 arguments, `start`, `end`, each of which can be omitted.
+  - The `start` argument specifies the first index to include.
+  - The `end` argument specifies the first index to exclude and end the slicing.
+- `fallback`
+  - Takes any number of arguments, to which any variables can be passed
+  - Returns the first non-empty value, in a list
+  - Returns an empty list as a fallback
+  - Example use: ` {{ foo | fallback(bar, spam) | unwrap }}`
+    - This returns either value of `foo`, `bar` or `spam`, whichever is non-empty.
+    - Precedence is order-dependent.
 
 ### Field Path
 

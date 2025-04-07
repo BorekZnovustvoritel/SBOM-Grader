@@ -6,6 +6,7 @@ import yaml
 from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
     TRANSLATION_MAP_VALIDATION_SCHEMA_PATH,
+    FIELD_NOT_PRESENT,
 )
 from sbomgrader.core.documents import Document
 from sbomgrader.core.field_resolve import (
@@ -43,10 +44,19 @@ class Data:
         doc: Document,
         path_to_instance: str | None = None,
         prune_empty: bool = True,
+        globally_resolved_variables: dict[str, list[Any]] = None,
     ) -> Any:
+        globally_resolved_variables = globally_resolved_variables or {}
         resolved_variables = self.field_resolver.resolve_variables(
-            doc.doc, path_to_instance
+            doc.doc,
+            path_to_instance,
+            already_resolved_variables=globally_resolved_variables,
         )
+        # Remove invalid values
+        for var_name, var_val in resolved_variables.items():
+            resolved_variables[var_name] = [
+                val for val in var_val if val is not FIELD_NOT_PRESENT
+            ]
         dict_ = yaml.safe_load(
             self.jinja_env.from_string(self.template).render(**resolved_variables)
         )
@@ -107,17 +117,24 @@ class Chunk:
     def resolver_for(self, sbom_format: SBOMFormat) -> FieldResolver:
         return getattr(self, f"{self._first_or_second(sbom_format)}resolver")
 
-    def occurrences(self, doc: Document) -> list[str]:
+    def occurrences(
+        self, doc: Document, fallback_variables: dict[str, Any] = None
+    ) -> list[str]:
         """Returns a list of string fieldPaths where the element occurs."""
+        fallback_variables = fallback_variables or {}
         resolver = self.resolver_for(doc.sbom_format)
-        return resolver.get_paths(doc.doc, self.field_path_for(doc.sbom_format), {})
+        return resolver.get_paths(
+            doc.doc, self.field_path_for(doc.sbom_format), fallback_variables
+        )
 
     def convert_and_add(
         self,
         orig_doc: Document,
         new_doc: dict[str, Any],
+        globally_resolved_variables: dict[str, list[Any]] = None,
     ) -> None:
         """Mutates the new_doc with the occurrences of this chunk."""
+        globally_resolved_variables = globally_resolved_variables or {}
         convert_from = orig_doc.sbom_format
         if convert_from not in {self.first_format, self.second_format}:
             fallbacks = get_fallbacks(orig_doc.sbom_format)
@@ -137,7 +154,7 @@ class Chunk:
         if not relevant_data:
             # This chunk does not specify anything for this direction
             return
-        for chunk_occurrence in self.occurrences(orig_doc):
+        for chunk_occurrence in self.occurrences(orig_doc, globally_resolved_variables):
             rendered_data = relevant_data.render(orig_doc, chunk_occurrence)
             if not should_remove(rendered_data):
                 appender_resolver.insert_at_path(new_doc, append_path, rendered_data)
@@ -149,11 +166,19 @@ class TranslationMap:
         first: SBOMFormat,
         second: SBOMFormat,
         chunks: list[Chunk],
+        first_variables: dict[str, Variable],
+        second_variables: dict[str, Variable],
+        preprocessing_funcs: dict[SBOMFormat, list[Callable]] = None,
         postprocessing_funcs: dict[SBOMFormat, list[Callable]] = None,
     ):
         self.first = first
         self.second = second
         self.chunks = chunks
+        self.first_variables = first_variables or {}
+        self.second_variables = second_variables or {}
+        self.preprocessing_funcs: dict[SBOMFormat, list[Callable[[dict], Any]]] = (
+            preprocessing_funcs or {}
+        )
         self.postprocessing_funcs: dict[
             SBOMFormat, list[Callable[[dict, dict], Any]]
         ] = (postprocessing_funcs or {})
@@ -219,18 +244,35 @@ class TranslationMap:
             )
             chunks.append(chunk)
 
+        preprocessing_dict = {}
         postprocessing_dict = {}
-        for first_or_second, form in ("first", first), ("second", second):
-            required_funcs = schema_dict.get(f"{first_or_second}Postprocessing", [])
-            if not required_funcs:
-                continue
-            postprocessing_dict[form] = []
-            py_file = get_path_to_module(file, "postprocessing", first_or_second, form)
-            python_loader = PythonLoader(py_file)
-            for func_name in required_funcs:
-                postprocessing_dict[form].append(python_loader.load_func(func_name))
+        for dict_, kind, schema_key in [
+            (
+                preprocessing_dict,
+                "preprocessing",
+                "Preprocessing",
+            ),
+            (postprocessing_dict, "postprocessing", "Postprocessing"),
+        ]:
+            for first_or_second, form in ("first", first), ("second", second):
+                required_funcs = schema_dict.get(f"{first_or_second}{schema_key}", [])
+                if not required_funcs:
+                    continue
+                dict_[form] = []
+                py_file = get_path_to_module(file, kind, first_or_second, form)
+                python_loader = PythonLoader(py_file)
+                for func_name in required_funcs:
+                    dict_[form].append(python_loader.load_func(func_name))
 
-        return TranslationMap(first, second, chunks, postprocessing_dict)
+        return TranslationMap(
+            first,
+            second,
+            chunks,
+            first_glob_var_initialized,
+            second_glob_var_initialized,
+            preprocessing_dict,
+            postprocessing_dict,
+        )
 
     def _output_format(self, doc: Document) -> SBOMFormat:
         for form in self.first, self.second:
@@ -238,6 +280,15 @@ class TranslationMap:
                 doc.sbom_format == fallback for fallback in get_fallbacks(form)
             ):
                 return form
+
+    def _input_format(self, doc: Document) -> SBOMFormat:
+        for form in self.first, self.second:
+            if doc.sbom_format is form:
+                return form
+        for form in self.first, self.second:
+            if doc.sbom_format in get_fallbacks(form):
+                return form
+        raise ValueError(f"Cannot do anything with this format: {doc.sbom_format}")
 
     def convert(
         self, doc: Document, override_format: SBOMFormat | None = None
@@ -255,8 +306,30 @@ class TranslationMap:
             )
             for fallback in doc.sbom_format_fallback
         ), f"This map cannot convert from {doc.sbom_format}."
+        # Preprocess
+        dict_ = doc.doc
+        for preprocessing_func in self.preprocessing_funcs.get(
+            self._input_format(doc), []
+        ):
+            res = preprocessing_func(doc.doc)
+            if res:
+                dict_ = res
+        doc = Document(dict_)
+
+        # Load global vars
+        variable_definitions = (
+            self.first_variables
+            if self._input_format(doc) == self.first
+            else self.second_variables
+        )
+        globally_loaded_variables = FieldResolver(
+            variable_definitions
+        ).resolve_variables(doc.doc)
+
+        # Conversion
         for chunk in self.chunks:
             chunk.convert_and_add(doc, new_data)
+        # Postprocess
         for postprocessing_func in self.postprocessing_funcs.get(
             self._output_format(doc), []
         ):

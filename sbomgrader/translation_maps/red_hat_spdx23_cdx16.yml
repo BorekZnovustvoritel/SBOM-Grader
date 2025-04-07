@@ -133,11 +133,9 @@ chunks:
 
       name: {{ bom_name | trim }}
 
-      documentNamespace: {{ supplier_urls | unwrap |
-      func(name="url_to_namespace",
-      component_name_var=main_element_name,
-      serial_no_var=serial_number,
-      fallback_url_var=component_supplier_urls) }}
+      documentNamespace: {{ supplier_urls | fallback(component_supplier_urls) |
+      unwrap | func(name="url_to_namespace",
+      component_name_var=main_element_name, serial_no_var=serial_number) }}
 
       relationships:
 
@@ -833,13 +831,18 @@ chunks:
 
       {% endfor %}
 
+secondPreprocessing:
+  - ensure_supplier_format
+  - ensure_tools_format
+  - clone_main_element
+
 firstPostprocessing:
   - set_relationships_last
 
 secondPostprocessing:
   - deduplicate_srpm_midstreams
   - deduplicate_srpm_upstreams
+  - try_to_restore_org_urls
   - merge_dependencies
   - resolve_types
-  - try_to_restore_org_urls
   - clone_main_component

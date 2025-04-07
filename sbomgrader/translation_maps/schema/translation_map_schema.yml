@@ -48,10 +48,15 @@ properties:
         - required:
             - secondData
       additionalProperties: false
+
+  firstPreprocessing:
+    $ref: "#/$defs/processing"
+  secondPreprocessing:
+    $ref: "#/$defs/processing"
   firstPostprocessing:
-    $ref: "#/$defs/postprocessing"
+    $ref: "#/$defs/processing"
   secondPostprocessing:
-    $ref: "#/$defs/postprocessing"
+    $ref: "#/$defs/processing"
 
 additionalProperties: false
 required:
@@ -76,7 +81,7 @@ $defs:
         - fieldPath
       additionalProperties: false
     description: Variables are populated from the other format.
-  postprocessing:
+  processing:
     type: array
     items:
       type: string

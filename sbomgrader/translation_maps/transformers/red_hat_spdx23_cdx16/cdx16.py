@@ -38,10 +38,7 @@ def url_to_namespace(
     url: str,
     component_name_var: list[str],
     serial_no_var: list[str],
-    fallback_url_var: list[str],
 ) -> str:
-    if not url or not isinstance(url, str):
-        url = next(iter(fallback_url_var), None)
     if not url or not isinstance(url, str):
         url = "https://github.com/BorekZnovustvoritel/SBOM-Grader"
     end_string = urllib.parse.quote_plus(

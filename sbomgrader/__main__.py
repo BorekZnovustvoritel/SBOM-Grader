@@ -118,7 +118,7 @@ def grade(config: GradeConfig) -> None:
         markdown = Markdown(result.output(output_type))
         console.print(markdown)
     else:
-        console.print(result.output(output_type), output_type.value)
+        console.print(result.output(output_type))
     if validation_passed(result.grade, Grade(config.passing_grade)):
         exit(0)
     exit(1)

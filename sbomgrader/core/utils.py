@@ -50,6 +50,12 @@ def get_path_to_var_transformers(schema_path: str | Path) -> Path:
     return schema_path.parent / "transformers" / schema_path.name.split(".", 1)[0]
 
 
+def get_path_to_preprocessing(schema_path: str | Path) -> Path:
+    if isinstance(schema_path, str):
+        schema_path = Path(schema_path)
+    return schema_path.parent / "preprocessing" / schema_path.name.split(".", 1)[0]
+
+
 def get_path_to_postprocessing(schema_path: str | Path) -> Path:
     if isinstance(schema_path, str):
         schema_path = Path(schema_path)
@@ -58,16 +64,19 @@ def get_path_to_postprocessing(schema_path: str | Path) -> Path:
 
 def get_path_to_module(
     schema_path: str | Path,
-    kind: Literal["transformer", "postprocessing"],
+    kind: Literal["transformer", "preprocessing", "postprocessing"],
     first_or_second: Literal["first", "second"],
     sbom_format: "sbomgrader.core.formats.SBOMFormat,",
 ):
-    if kind == "transformer":
-        mod_dir = get_path_to_var_transformers(schema_path)
-    elif kind == "postprocessing":
-        mod_dir = get_path_to_postprocessing(schema_path)
-    else:
+    map_ = {
+        "transformer": get_path_to_var_transformers,
+        "preprocessing": get_path_to_preprocessing,
+        "postprocessing": get_path_to_postprocessing,
+    }
+    mod_func = map_.get(kind)
+    if not mod_func:
         raise ValueError(f"Wrong kind value: {kind}")
+    mod_dir = mod_func(schema_path)
     file = None
     for filename in (
         f"{first_or_second}.py",
@@ -94,9 +103,9 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
 
     def unwrap(list_: list[Any]) -> Any:
         try:
-            return next(iter(list_), FIELD_NOT_PRESENT)
+            return next(iter(list_), "")
         except TypeError:
-            return FIELD_NOT_PRESENT
+            return ""
 
     def sliced(
         list_: list[Any] | str, start: int = 0, end: int = None
