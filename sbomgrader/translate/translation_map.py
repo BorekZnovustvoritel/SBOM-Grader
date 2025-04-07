@@ -158,7 +158,9 @@ class Chunk:
             # This chunk does not specify anything for this direction
             return
         for chunk_occurrence in self.occurrences(orig_doc, globally_resolved_variables):
-            rendered_data = relevant_data.render(orig_doc, chunk_occurrence, globally_resolved_variables=global_vars)
+            rendered_data = relevant_data.render(
+                orig_doc, chunk_occurrence, globally_resolved_variables=global_vars
+            )
             if not should_remove(rendered_data):
                 appender_resolver.insert_at_path(new_doc, append_path, rendered_data)
 
