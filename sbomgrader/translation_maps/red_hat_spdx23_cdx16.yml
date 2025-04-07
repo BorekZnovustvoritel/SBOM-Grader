@@ -106,7 +106,7 @@ chunks:
 
       creationInfo:
 
-        created: "{{ creation_time | unwrap }}"
+        created: '{{ creation_time | unwrap }}'
 
         creators:
 
@@ -143,9 +143,9 @@ chunks:
 
           relationshipType: DESCRIBES
 
-          relatedSpdxElement: "{{ main_element_bom_ref | unwrap |
+          relatedSpdxElement: '{{ main_element_bom_ref | unwrap |
       func(name="bom_ref_to_spdxid",
-      component_name_var=main_element_name) }}"
+      component_name_var=main_element_name) }}'
     firstFieldPath: .
     secondData: >-
       bomFormat: "CycloneDX"
@@ -158,7 +158,7 @@ chunks:
 
       metadata:
 
-        timestamp: "{{ creation_time | unwrap }}"
+        timestamp: '{{ creation_time | unwrap }}'
 
         component:
 
@@ -182,7 +182,7 @@ chunks:
           {% for url in document_namespace |
       func(name="namespaces_to_url") %}
 
-            - "{{ url }}"
+            - '{{ url }}'
 
           {% endfor %}
 
@@ -196,7 +196,7 @@ chunks:
 
             - name: {{ tool_obj.name }}
 
-              version: "{{ tool_obj.version }}"
+              version: '{{ tool_obj.version }}'
 
               type: application
 
@@ -300,8 +300,8 @@ chunks:
       relatedSpdxElement=${product_packages_spdxids}]
     secondFieldPath: dependencies[|]
     secondData: >-
-      ref: "{{ spdxid_second_side | unwrap |
-      func(name="spdxid_to_bom_ref", purls=second_component_purls) }}"
+      ref: '{{ spdxid_second_side | unwrap |
+      func(name="spdxid_to_bom_ref", purls=second_component_purls) }}'
 
       provides:
 
@@ -371,7 +371,7 @@ chunks:
       - name: spdxid
         fieldPath: '@.?.SPDXID'
       - name: supplier
-        fieldPath: '@.supplier'
+        fieldPath: '@.?.supplier'
       - name: purls
         fieldPath: '@.?.externalRefs[?.referenceType=purl]?.referenceLocator'
       - name: version_info
@@ -395,7 +395,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      versionInfo: "{{ version | unwrap }}"
+      versionInfo: '{{ version | unwrap }}'
 
       {% if bom_ref == main_element_bom_ref %}
 
@@ -530,7 +530,7 @@ chunks:
 
       type: {{ purls | unwrap | func(name="purl_to_component_type") }}
 
-      version: "{{ version_info | unwrap }}"
+      version: '{{ version_info | unwrap }}'
 
       supplier:
 
@@ -573,9 +573,9 @@ chunks:
 
           - field: purl
 
-            concludedValue: "{{ purl |
+            concludedValue: '{{ purl |
       func(name="purl_with_download_location",
-      download_location_var=download_location) }}"
+      download_location_var=download_location) }}'
 
         {% endfor %}
 
@@ -583,7 +583,7 @@ chunks:
 
           - field: cpe
 
-            concludedValue: "{{ cpe }}"
+            concludedValue: '{{ cpe }}'
 
         {% endfor %}
 
@@ -649,7 +649,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      versionInfo: "{{ version | unwrap }}"
+      versionInfo: '{{ version | unwrap }}'
 
       downloadLocation: {{ purls | unwrap |
       func(name="purl_to_download_location") }}
@@ -701,7 +701,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      version: "{{ version | unwrap }}"
+      version: '{{ version | unwrap }}'
 
       purl: {{ purls | unwrap | func(name="purl_with_download_location",
       download_location_var=download_location) }}
@@ -764,7 +764,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      versionInfo: "{{ version | unwrap }}"
+      versionInfo: '{{ version | unwrap }}'
 
       downloadLocation: {{ purls | unwrap |
       func(name="purl_to_download_location") }}
@@ -815,7 +815,7 @@ chunks:
 
       name: {{ name | unwrap }}
 
-      version: "{{ version | unwrap }}"
+      version: '{{ version | unwrap }}'
 
       purl: {{ purls | unwrap |
       func(name="purl_with_download_location",

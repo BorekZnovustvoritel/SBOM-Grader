@@ -147,6 +147,9 @@ class Chunk:
             if self.first_format != convert_from
             else self.second_format
         )
+        source_resolver = self.resolver_for(convert_from)
+        chunk_based_absolute_vars = source_resolver.resolve_variables(orig_doc.doc)
+        global_vars = {**globally_resolved_variables, **chunk_based_absolute_vars}
 
         appender_resolver = self.resolver_for(convert_to)
         append_path = self.field_path_for(convert_to)
@@ -155,7 +158,7 @@ class Chunk:
             # This chunk does not specify anything for this direction
             return
         for chunk_occurrence in self.occurrences(orig_doc, globally_resolved_variables):
-            rendered_data = relevant_data.render(orig_doc, chunk_occurrence)
+            rendered_data = relevant_data.render(orig_doc, chunk_occurrence, globally_resolved_variables=global_vars)
             if not should_remove(rendered_data):
                 appender_resolver.insert_at_path(new_doc, append_path, rendered_data)
 
@@ -328,7 +331,7 @@ class TranslationMap:
 
         # Conversion
         for chunk in self.chunks:
-            chunk.convert_and_add(doc, new_data)
+            chunk.convert_and_add(doc, new_data, globally_loaded_variables)
         # Postprocess
         for postprocessing_func in self.postprocessing_funcs.get(
             self._output_format(doc), []
