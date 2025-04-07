@@ -40,6 +40,9 @@ The variables have 2 use-cases:
 When used in `FieldPath` queries, variable values are always loaded from
 the currently processed format.
 
+> **_NOTE:_** To learn more about FieldPath Queries, refer to 
+> [this Document](../rulesets/README.md).
+
 When used in data chunks, variables are always searched in **the opposite** format.
 
 ## Chunks

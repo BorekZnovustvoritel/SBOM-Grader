@@ -20,6 +20,14 @@ This project has a unique query language for dynamic SBOM field querying. The op
   less items than is the length of list `foo`
 - `foo[id=1,name!=hi]bar` queries all attributes `bar` for items in `foo` which have attribute
   `id` equal to `1` and attribute `name` not equal to `hi`
+- `foo[bar%=hello]` Queries all elements in the list `foo` which contain an attribute `bar`
+  with a value that STARTS with a string `hello`
+- `foo[bar%=See you.]` Queries all elements in the list `foo` which contain an attribute `bar`
+  with a value that ENDS with a string `See you.`
+- `foo[bar%sbom]` Queries all elements in the list `foo` which contain an attribute `bar`
+  with a value that CONTAINS a string `sbom`
+- `foo[bar!%vex]` Queries all elements in the list `foo` which contain an attribute `bar`
+  with a value that DOES NOT CONTAIN the string `vex`
 - `foo[id=${my_var},name!=${your_var}]` queries all attributes `bar` for items in `foo` which
   have attribute `id` equal to some value in variable `my_var` and attribute `name` not equal
   to any value in variable `your_var`. Note that the variable has to be on the right side of
