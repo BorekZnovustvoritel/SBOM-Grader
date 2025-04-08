@@ -27,6 +27,8 @@ from sbomgrader.translate.prune import prune, should_remove
 
 
 class Data:
+    """The data to render in the new document."""
+
     def __init__(
         self,
         template: str,
@@ -46,6 +48,10 @@ class Data:
         prune_empty: bool = True,
         globally_resolved_variables: dict[str, list[Any]] = None,
     ) -> Any:
+        """
+        Renders a Jinja2 expression according to variables
+        populated from the document.
+        """
         globally_resolved_variables = globally_resolved_variables or {}
         resolved_variables = self.field_resolver.resolve_variables(
             doc.doc,
@@ -66,6 +72,8 @@ class Data:
 
 
 class Chunk:
+    """A piece of information represented in 2 SBOM formats."""
+
     def __init__(
         self,
         name: str,
@@ -166,6 +174,8 @@ class Chunk:
 
 
 class TranslationMap:
+    """This objects transforms SBOMs between formats."""
+
     def __init__(
         self,
         first: SBOMFormat,
@@ -188,16 +198,9 @@ class TranslationMap:
             SBOMFormat, list[Callable[[dict, dict], Any]]
         ] = (postprocessing_funcs or {})
 
-    @property
-    def first_with_fallbacks(self) -> set[SBOMFormat]:
-        return {self.first, *get_fallbacks(self.first)}
-
-    @property
-    def second_with_fallbacks(self) -> set[SBOMFormat]:
-        return {self.second, *get_fallbacks(self.second)}
-
     @staticmethod
     def from_file(file: str | Path) -> "TranslationMap":
+        """Load the Translation Map from a file."""
         schema_dict = get_mapping(file, TRANSLATION_MAP_VALIDATION_SCHEMA_PATH)
 
         first = SBOMFormat(schema_dict["first"])
@@ -346,21 +349,3 @@ class TranslationMap:
         if override_format is not None:
             new_data.update(SBOM_FORMAT_DEFINITION_MAPPING[override_format])
         return Document(new_data)
-
-    def is_exact_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
-        """Determine if this map converts between these two formats."""
-        return ((from_ is self.first) and (to is self.second)) or (
-            (from_ is self.second) and (to is self.first)
-        )
-
-    def is_suitable_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
-        """Determine if the map is able to convert between formats including fallbacks."""
-        if self.is_exact_map(from_, to):
-            return True
-        from_fallbacks = get_fallbacks(from_)
-        from_fallbacks.add(from_)
-        to_fallbacks = get_fallbacks(to)
-        to_fallbacks.add(to)
-        return (self.first in from_fallbacks and self.second in to_fallbacks) or (
-            self.first in to_fallbacks and self.second in from_fallbacks
-        )

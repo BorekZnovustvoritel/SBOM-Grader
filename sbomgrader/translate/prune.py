@@ -5,6 +5,7 @@ from sbomgrader.core.definitions import FIELD_NOT_PRESENT, TIME_ISO_FORMAT_STRIN
 
 
 def should_remove(item: Any) -> bool:
+    """Is the field considered invalid?"""
     return (
         item is None
         or item == ""
@@ -24,7 +25,7 @@ def __is_prunable(item: Any) -> bool:
 
 
 def prune(struc: Any) -> Any:
-    """This method cuts off invalid values from returned structures."""
+    """This function cuts off invalid values from returned structures."""
     if isinstance(struc, datetime.datetime):
         # YAML automatically transforms ISO time to python datetime.
         # Datetime is not JSON-serializable
