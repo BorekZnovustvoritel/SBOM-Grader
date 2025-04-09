@@ -6,11 +6,10 @@ from sbomgrader.core.definitions import FIELD_NOT_PRESENT, TIME_ISO_FORMAT_STRIN
 
 def should_remove(item: Any) -> bool:
     """Is the field considered invalid?"""
+    # All kinds of empty values are considered invalid
+    # But `False` is valid
     return (
-        item is None
-        or item == ""
-        or (isinstance(item, list) and not len(item))
-        or (isinstance(item, dict) and not item)
+        (not item and item is not False)
         or item is FIELD_NOT_PRESENT
         or item == "Field not present."
     )

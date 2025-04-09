@@ -63,12 +63,12 @@ class Data:
             resolved_variables[var_name] = [
                 val for val in var_val if val is not FIELD_NOT_PRESENT
             ]
-        dict_ = yaml.safe_load(
+        data_value = yaml.safe_load(
             self.jinja_env.from_string(self.template).render(**resolved_variables)
         )
         if prune_empty:
-            dict_ = prune(dict_)
-        return dict_
+            data_value = prune(data_value)
+        return data_value
 
 
 class Chunk:
@@ -209,10 +209,10 @@ class TranslationMap:
         first_glob_var = schema_dict.get("firstVariables")
         second_glob_var = schema_dict.get("secondVariables")
 
-        first_transformer_file = get_path_to_module(file, "transformer", "first", first)
+        first_transformer_file = get_path_to_module(file, "Transformer", "first", first)
         first_glob_var_initialized = Variable.from_schema(first_glob_var)
         second_transformer_file = get_path_to_module(
-            file, "transformer", "second", second
+            file, "Transformer", "second", second
         )
         second_glob_var_initialized = Variable.from_schema(second_glob_var)
 
@@ -254,23 +254,25 @@ class TranslationMap:
 
         preprocessing_dict = {}
         postprocessing_dict = {}
-        for dict_, kind, schema_key in [
+        for dict_of_functions, kind in (
             (
                 preprocessing_dict,
-                "preprocessing",
                 "Preprocessing",
             ),
-            (postprocessing_dict, "postprocessing", "Postprocessing"),
-        ]:
+            (postprocessing_dict, "Postprocessing"),
+        ):
+            # Load both preprocessing and postprocessing functions
             for first_or_second, form in ("first", first), ("second", second):
-                required_funcs = schema_dict.get(f"{first_or_second}{schema_key}", [])
+                # Load both the functions for the first and the second format
+                required_funcs = schema_dict.get(f"{first_or_second}{kind}", [])
                 if not required_funcs:
+                    # There are no functions required by the TranslationMap
                     continue
-                dict_[form] = []
+                dict_of_functions[form] = []
                 py_file = get_path_to_module(file, kind, first_or_second, form)
                 python_loader = PythonLoader(py_file)
                 for func_name in required_funcs:
-                    dict_[form].append(python_loader.load_func(func_name))
+                    dict_of_functions[form].append(python_loader.load_func(func_name))
 
         return TranslationMap(
             first,
@@ -299,11 +301,17 @@ class TranslationMap:
         raise ValueError(f"Cannot do anything with this format: {doc.sbom_format}")
 
     def convert(
-        self, doc: Document, override_format: SBOMFormat | None = None
+        self, sbom: Document, override_format: SBOMFormat | None = None
     ) -> Document:
-        """Converts document to a format"""
+        """
+        Converts document to the specified format.
+        :argument sbom: Sbom document to convert.
+        :argument override_format: Specify which is the output format.
+        If omitted, the format is chosen from values self.first or
+        self.second. The value not associated with input document will be used.
+        """
         new_data = {}
-        assert doc.sbom_format in (
+        assert sbom.sbom_format in (
             self.first,
             self.second,
         ) or any(
@@ -312,36 +320,37 @@ class TranslationMap:
                 self.first,
                 self.second,
             )
-            for fallback in doc.sbom_format_fallback
-        ), f"This map cannot convert from {doc.sbom_format}."
+            for fallback in sbom.sbom_format_fallback
+        ), f"This map cannot convert from {sbom.sbom_format}."
         # Preprocess
-        dict_ = doc.doc
+        sbom_dict = sbom.doc
         for preprocessing_func in self.preprocessing_funcs.get(
-            self._input_format(doc), []
+            self._input_format(sbom), []
         ):
-            res = preprocessing_func(doc.doc)
+            res = preprocessing_func(sbom_dict)
             if res:
-                dict_ = res
-        doc = Document(dict_)
+                sbom_dict = res
+        # Finish preprocessing
+        sbom = Document(sbom_dict)
 
         # Load global vars
         variable_definitions = (
             self.first_variables
-            if self._input_format(doc) == self.first
+            if self._input_format(sbom) == self.first
             else self.second_variables
         )
         globally_loaded_variables = FieldResolver(
             variable_definitions
-        ).resolve_variables(doc.doc)
+        ).resolve_variables(sbom.doc)
 
         # Conversion
         for chunk in self.chunks:
-            chunk.convert_and_add(doc, new_data, globally_loaded_variables)
+            chunk.convert_and_add(sbom, new_data, globally_loaded_variables)
         # Postprocess
         for postprocessing_func in self.postprocessing_funcs.get(
-            self._output_format(doc), []
+            self._output_format(sbom), []
         ):
-            res = postprocessing_func(doc.doc, new_data)
+            res = postprocessing_func(sbom.doc, new_data)
             if res:
                 # If the function returns anything, make it the new data output.
                 # Assume mutations were performed in-place otherwise.

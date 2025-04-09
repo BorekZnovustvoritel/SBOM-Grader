@@ -69,7 +69,7 @@ def get_path_to_postprocessing(schema_path: str | Path) -> Path:
 
 def get_path_to_module(
     schema_path: str | Path,
-    kind: Literal["transformer", "preprocessing", "postprocessing"],
+    kind: Literal["Transformer", "Preprocessing", "Postprocessing"],
     first_or_second: Literal["first", "second"],
     sbom_format: "sbomgrader.core.formats.SBOMFormat,",
 ):
@@ -84,9 +84,9 @@ def get_path_to_module(
     :argument sbom_format: What is the SBOM Format this module relates to?
     """
     map_kind_to_module_function = {
-        "transformer": get_path_to_var_transformers,
-        "preprocessing": get_path_to_preprocessing,
-        "postprocessing": get_path_to_postprocessing,
+        "Transformer": get_path_to_var_transformers,
+        "Preprocessing": get_path_to_preprocessing,
+        "Postprocessing": get_path_to_postprocessing,
     }
     mod_func = map_kind_to_module_function.get(kind)
     if not mod_func:
@@ -118,20 +118,20 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
     )
     env.globals["SBOMGRADER_SIGNATURE"] = f"SBOMGrader {version}"
 
-    def unwrap(list_: list[Any]) -> Any:
+    def unwrap(input_list: list[Any]) -> Any:
         """Return the first element of a list."""
         try:
-            return next(iter(list_), "")
+            return next(iter(input_list), "")
         except TypeError:
             return ""
 
     def sliced(
-        list_: list[Any] | str, start: int = 0, end: int = None
+        input_list: list[Any] | str, start: int = 0, end: int = None
     ) -> list[Any] | str:
         """Return a slice of a list or a string."""
-        if not isinstance(list_, list) and not isinstance(list_, str):
+        if not isinstance(input_list, list) and not isinstance(input_list, str):
             return []
-        return list_[start:end]
+        return input_list[start:end]
 
     def fallback(first: list[Any], *other: list[Any]) -> list[Any]:
         """Return the first non-empty variable value (non-empty list)."""
