@@ -8,6 +8,7 @@ from sbomgrader.translate.translation_map import TranslationMap
 def choose_map(
     document: Document, out: SBOMFormat, *custom_maps: TranslationMap
 ) -> TranslationMap:
+    """Choose the translation map according to the document and output format."""
     for map_set in (custom_maps, get_default_maps()):
         # Prefer custom maps to default ones
         for match_type in ("exact", "suitable"):
@@ -21,6 +22,7 @@ def choose_map(
 
 
 def get_default_maps() -> list[TranslationMap]:
+    """Returns the list of pre-installed maps."""
     ans = []
     for file in TRANSLATION_MAP_DIR.iterdir():
         if not is_mapping(file):
@@ -59,6 +61,7 @@ def get_all_map_list_tuples(
 
 
 def get_all_map_list_markdown(*custom_maps: TranslationMap) -> str:
+    """Returns a Markdown string representing all possible translation directions."""
     map_directions, fallback_tuples = get_all_map_list_tuples(*custom_maps)
     ans = ""
     for tuple_ in map_directions:

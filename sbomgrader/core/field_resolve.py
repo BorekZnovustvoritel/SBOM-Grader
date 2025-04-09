@@ -1,9 +1,9 @@
 import re
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Union, Any, Callable
 
-from black.trans import defaultdict
 
 from sbomgrader.core.definitions import (
     FIELD_NOT_PRESENT,
@@ -17,32 +17,71 @@ from sbomgrader.core.enums import QueryType
 
 
 class PathParser:
+    """Parses the FieldPath expression into an iterable list."""
+
     def __init__(self, path: str):
         self._path = path
         self.__next_is_query = False
         self.ans: dict[str, list[Union[str, QueryParser]]] = defaultdict(list)
 
     def __create_field(
-        self, field: str, next_is_query: bool, relative_path: str
+        self, field: str, next_is_query: bool, relative_path: "PathParser"
     ) -> None:
         if self.__next_is_query:
-            raw_field_path = field
-            if field.startswith("@"):
-                raw_field_path = field.replace("@", relative_path, 1)
-            next_ = QueryParser(raw_field_path)
+            if field == "@":
+                try:
+                    appropriate_relative_field = relative_path.parse()[
+                        len(self.ans[relative_path.raw_path])
+                    ]
+                except IndexError:
+                    raise ValueError(
+                        f"Problem parsing path '{self._path}' with relative hint '{relative_path.raw_path}'. "
+                        f"The relative hint is too short!"
+                    )
+                if isinstance(appropriate_relative_field, QueryParser):
+                    index_query = next(iter(appropriate_relative_field.parse()), None)
+                    if not index_query:
+                        raise ValueError(
+                            f"Problem parsing path '{self._path}' with relative hint '{relative_path.raw_path}'. "
+                            f"There are no queries to follow at step '{field}'."
+                        )
+                    if index_query.type_ is not QueryType.INDEX:
+                        raise ValueError(
+                            f"Problem parsing path '{self._path}' with relative hint '{relative_path.raw_path}'. "
+                            f"This is not an index query type: '{index_query.type_}'"
+                        )
+                    field = index_query.value
+            next_ = QueryParser(field)
         else:
             next_ = field.strip()
         self.__next_is_query = next_is_query
 
         if next_:
-            self.ans[relative_path].append(next_)
+            self.ans[relative_path.raw_path].append(next_)
 
     def parse(
         self, relative_path: str | None = None
     ) -> list[Union[str, "QueryParser"]]:
+        """
+        Returns a list of dictionary field names and queries for list filtering.
+        :argument relative_path: Used to populate "relative" fields
+        (relative path has the '@' symbol).
+        """
         relative_path = relative_path or ""
         if relative_path in self.ans:
             return self.ans[relative_path]
+        parsed_relative_path = PathParser(relative_path)
+        if relative_path:
+            if any(
+                any(query.type_ != QueryType.INDEX for query in item.parse())
+                for item in parsed_relative_path.parse()
+                if isinstance(item, QueryParser)
+            ):
+                raise ValueError(
+                    "Relative path can only include field names and absolute indices. "
+                    "HINT: If you wish to get a list of absolute paths, use the method "
+                    "`FieldResolver.get_paths()`."
+                )
         resolve_path = self._path
         if resolve_path.startswith("@"):
             if not relative_path:
@@ -55,7 +94,7 @@ class PathParser:
         for char in resolve_path:
             if char == "[":
                 if not in_block:
-                    self.__create_field(buffer, True, relative_path)
+                    self.__create_field(buffer, True, parsed_relative_path)
                     buffer = ""
                 else:
                     buffer += char
@@ -63,62 +102,96 @@ class PathParser:
             elif char == "]":
                 in_block -= 1
                 if not in_block:
-                    self.__create_field(buffer, False, relative_path)
+                    self.__create_field(buffer, False, parsed_relative_path)
                     buffer = ""
                 else:
                     buffer += char
             elif char == ".":
                 if not in_block:
-                    self.__create_field(buffer, False, relative_path)
+                    self.__create_field(buffer, False, parsed_relative_path)
                     buffer = ""
                 else:
                     buffer += char
             else:
                 buffer += char
         if buffer:
-            self.__create_field(buffer, False, relative_path)
+            self.__create_field(buffer, False, parsed_relative_path)
+        self.__next_is_query = None
         return self.ans[relative_path]
+
+    def __eq__(self, other):
+        if not isinstance(other, PathParser):
+            raise TypeError(
+                f"Cannot compare PathParser to object of type {type(other)}"
+            )
+        return self.parse() == other.parse()
+
+    @property
+    def raw_path(self) -> str:
+        """The original string containing the path."""
+        return self._path
 
 
 @dataclass
 class Query:
+    """Class holding an information about list filtering."""
+
     type_: QueryType
     value: str | int | None
     field_path: PathParser | None
 
     @property
     def variable(self) -> str | None:
-        if self.value and (match := re.match(r"^\$\{(?P<varname>\w+)}$", self.value)):
+        if (
+            self.value
+            and isinstance(self.value, str)
+            and (match := re.match(r"^\$\{(?P<varname>\w+)}$", self.value))
+        ):
             return match.group("varname")
 
 
 class QueryParser:
-    def __init__(self, path: str):
+    """
+    Parses strings into a list of Queries.
+    """
+
+    def __init__(self, path: str | int):
         self._path = path
+        self.ans: dict[str, list[Query]] = defaultdict(list)
 
     def __eq__(self, other):
         if not isinstance(other, QueryParser):
             raise TypeError(
                 f"Cannot compare QueryParser to object of type {type(other)}"
             )
-        return self._path == other._path
+        return self.parse() == other.parse()
 
-    def parse(self) -> list[Query]:
+    def parse(self, relative_path_index: str | None = None) -> list[Query]:
+        """Parse the query list. If required, replaces the relative symbol '@' with the provided index."""
+        if relative_path_index in self.ans:
+            return self.ans[relative_path_index]
+        if isinstance(self._path, int):
+            return [Query(QueryType.INDEX, value=self._path, field_path=None)]
         queries = []
         field_buffer = ""
         operation_buffer = ""
         value_buffer = ""
         in_block = 0
+        in_operation = False
         after_operation = False
+        operation_symbols = {"!", "=", "%", "|", "&"}
         for char in self._path:
             if re.match(r"\s", char) and not after_operation:
                 continue
-            if char in {"!", "=", "%", "|", "&"} and not in_block:
-                operation_buffer += char
+            if char not in operation_symbols and in_operation:
                 after_operation = True
+            if char in operation_symbols and not in_block and not after_operation:
+                operation_buffer += char
+                in_operation = True
+
             elif after_operation and char != ",":
                 value_buffer += char
-            elif char == "," and after_operation:
+            elif char == "," and in_operation:
                 queries.append(
                     Query(
                         type_=QueryType(operation_buffer),
@@ -131,6 +204,7 @@ class QueryParser:
                 field_buffer = ""
                 operation_buffer = ""
                 value_buffer = ""
+                in_operation = False
                 after_operation = False
             elif char == "[":
                 field_buffer += char
@@ -143,11 +217,19 @@ class QueryParser:
                 field_buffer += char.strip()
 
         if field_buffer or operation_buffer or value_buffer:
-            if (
+            if field_buffer == "@" and not operation_buffer and not value_buffer:
+                # There is no query, just a relative symbol
+                query = Query(
+                    type_=QueryType.INDEX,
+                    field_path=None,
+                    value=int(relative_path_index),
+                )
+            elif (
                 (m := re.fullmatch(r"\d+", field_buffer))
                 and not operation_buffer
                 and not value_buffer
             ):
+                # There is no query, just an index
                 query = Query(
                     type_=QueryType.INDEX, field_path=None, value=int(m.group())
                 )
@@ -155,10 +237,21 @@ class QueryParser:
                 query = Query(
                     type_=QueryType(operation_buffer.strip()),
                     field_path=PathParser(field_buffer.strip()),
-                    value=value_buffer.strip(),
+                    value=self._load_val(value_buffer),
                 )
             queries.append(query)
+        self.ans[relative_path_index] = queries
         return queries
+
+    @staticmethod
+    def _load_val(value: str) -> Any:
+        stripped_val = value.strip()
+        if stripped_val == FIELD_NOT_PRESENT.string_repr:
+            return FIELD_NOT_PRESENT
+        return stripped_val
+
+    def __repr__(self):
+        return str(self._path)
 
 
 class Variable:
@@ -173,6 +266,7 @@ class Variable:
 
     @staticmethod
     def from_schema(schema_list: list[dict[str, Any]]) -> dict[str, "Variable"]:
+        """Load a variable from a dictionary."""
         ans = {}
         if not schema_list:
             return ans
@@ -184,7 +278,8 @@ class Variable:
 
     @property
     def is_relative(self) -> bool:
-        return self.raw_field_path.startswith("@.")
+        """Does the definition of this Variable contain a relative path?"""
+        return self.raw_field_path.startswith("@") or "[@]" in self.raw_field_path
 
     def __hash__(self):
         return self.name.__hash__()
@@ -193,22 +288,14 @@ class Variable:
         return f"<{self.__class__.__name__}, name: {self.name}, field_path: {self.raw_field_path}>"
 
 
-class VariableRef:
-    def __init__(self, identifier: str):
-        self.original_identifier = identifier
-        self.name: str = identifier
-
-    def __hash__(self):
-        return self.original_identifier.__hash__()
-
-
 class FieldResolver:
+    """
+    Resolves path expressions and dictionaries (documents).
+    Can return their paths, values or executes functions on each occurrence.
+    """
 
     def __init__(self, variables: dict[str, Variable]):
         self._uninitialized_vars = variables
-
-    def has_var(self, var_name: str) -> bool:
-        return var_name in self._uninitialized_vars
 
     @property
     def var_definitions(self) -> dict[str, Variable]:
@@ -216,6 +303,7 @@ class FieldResolver:
 
     @property
     def absolute_variables(self) -> dict[str, Variable]:
+        """Returns just variables without a relative path definition."""
         return {
             key: val
             for key, val in self._uninitialized_vars.items()
@@ -224,6 +312,7 @@ class FieldResolver:
 
     @property
     def relative_variables(self) -> dict[str, Variable]:
+        """Returns just variables with a relative path definition."""
         return {
             key: val for key, val in self._uninitialized_vars.items() if val.is_relative
         }
@@ -232,29 +321,45 @@ class FieldResolver:
         self,
         whole_doc: dict[str, Any],
         path_to_instance: str | None = None,
+        already_resolved_variables: dict[str, list[Any]] = None,
         warning_on: bool = True,
     ) -> dict[str, list[Any]]:
         """
         Resolve dependencies.
         Without the argument `path_to_instance` this method cannot resolve relative variables
         nor absolute variables relying on relative ones.
+        :argument whole_doc: The document that the FieldPath expression should be evaluated on
+        :argument path_to_instance: The base for the relative paths.
+        :argument already_resolved_variables: Variable values resolved previously. Helps with
+        performance.
+        :argument warning_on: Should this function display a warning to the STDERR?
         """
+        already_resolved_variables = already_resolved_variables or {}
         # first resolve dependency tree for variables
         dependencies = {}
         if path_to_instance:
             vars_to_resolve = self._uninitialized_vars
         else:
             vars_to_resolve = self.absolute_variables
+        vars_to_resolve = {
+            k: v
+            for k, v in vars_to_resolve.items()
+            if k not in already_resolved_variables
+        }
         for variable in vars_to_resolve.values():
-            dependencies[variable.name] = set()
-            dependencies[variable.name].update(
-                VariableRef(match.group("var_id")).name
+            depends_on_vars = {
+                match.group("var_id")
                 for match in re.finditer(VAR_REF_REGEX, variable.raw_field_path)
-            )
+            }
+            dependencies[variable.name] = {
+                varname
+                for varname in depends_on_vars
+                if varname not in already_resolved_variables
+            }
             assert (
                 variable.name not in dependencies[variable.name]
             ), f"Self referencing variable {variable.name} found."
-        resolved_variables: dict[str, list] = {}
+        resolved_variables: dict[str, list] = {**already_resolved_variables}
         while not all(var_name in resolved_variables for var_name in dependencies):
             # Get a var with no dependencies
             var_name, var_deps = sorted(dependencies.items(), key=lambda x: len(x[1]))[
@@ -266,9 +371,11 @@ class FieldResolver:
                 # Cannot resolve absolute variable referencing a relative one
                 dependencies.pop(var_name)
                 continue
-            assert (
-                not var_deps
-            ), f"Circular variable reference found for variable {var_name}"
+            assert not var_deps, (
+                f"Circular variable reference found for variable {var_name}. "
+                f"Needs to resolve: {dependencies[var_name]}. "
+                f"Already resolved: {set(resolved_variables.keys())}"
+            )
 
             resolved_variables[var_name] = []
 
@@ -299,6 +406,22 @@ class FieldResolver:
                     dep.remove(var_name)
         return resolved_variables
 
+    @staticmethod
+    def __add_at_path(
+        mutable_doc: dict[str, Any],
+        path_remaining: list[str | QueryParser | PathParser],
+    ):
+        if path_remaining:
+            step = path_remaining[0]
+        else:
+            return
+        if path_remaining[1:] and isinstance(path_remaining[1], str):
+            # Add a dict
+            mutable_doc[step] = {}
+        if path_remaining[1:] and isinstance(path_remaining[1], QueryParser):
+            # Add a list
+            mutable_doc[step] = []
+
     def _run_on_path(
         self,
         doc_: Union[dict, list[Any], FIELD_NOT_PRESENT],
@@ -310,10 +433,13 @@ class FieldResolver:
         ran_on: set[str],
         create_nonexistent: bool = False,
     ):
-
+        """
+        This function is the main resolver. Recursively calls itself on nested fields
+        to search for all occurrences.
+        """
         if not accept_not_present_field and doc_ is FIELD_NOT_PRESENT:
             raise FieldNotPresentError("Field not present: ", path_tried)
-        if not path:
+        if not path or doc_ is FIELD_NOT_PRESENT:
             # The path has ended
             try:
                 resp = func_to_run(doc_)
@@ -341,6 +467,8 @@ class FieldResolver:
                 assert path[1:] and isinstance(
                     path[1], str
                 ), "Cannot use ? before anything else than a field name."
+                if path[1] not in doc_ and create_nonexistent:
+                    self.__add_at_path(doc_, path[1:])
                 if path[1] in doc_:
                     self._run_on_path(
                         doc_,
@@ -354,12 +482,7 @@ class FieldResolver:
                     )
             else:
                 if create_nonexistent and step not in doc_:
-                    if path[1:] and isinstance(path[1], str):
-                        # Add a dict
-                        doc_[step] = {}
-                    if path[1:] and isinstance(path[1], QueryParser):
-                        # Add a list
-                        doc_[step] = []
+                    self.__add_at_path(doc_, path)
                 self._run_on_path(
                     doc_.get(step, FIELD_NOT_PRESENT),
                     path[1:],
@@ -397,12 +520,12 @@ class FieldResolver:
                         if varname:
                             func = lambda x: x in variable_values[varname]
                         else:
-                            func = lambda x: str(x) == query.value
+                            func = lambda x: x == query.value
                     elif query.type_ is QueryType.NEQ:
                         if varname:
                             func = lambda x: x not in variable_values[varname]
                         else:
-                            func = lambda x: str(x) != query.value
+                            func = lambda x: x != query.value
                     elif query.type_ is QueryType.STARTSWITH:
                         if varname:
                             func = lambda x: isinstance(x, str) and any(
@@ -421,6 +544,20 @@ class FieldResolver:
                             func = lambda x: isinstance(x, str) and x.endswith(
                                 query.value
                             )
+                    elif query.type_ is QueryType.CONTAINS:
+                        if varname:
+                            func = lambda x: isinstance(x, str) and any(
+                                val in x for val in variable_values[varname]
+                            )
+                        else:
+                            func = lambda x: isinstance(x, str) and query.value in x
+                    elif query.type_ is QueryType.NOT_CONTAINS:
+                        if varname:
+                            func = lambda x: isinstance(x, str) and all(
+                                val not in x for val in variable_values[varname]
+                            )
+                        else:
+                            func = lambda x: isinstance(x, str) and query.value not in x
                     final_func = lambda x: (
                         to_use_in_query.add(idx) if func(x) else None
                     )
@@ -477,7 +614,7 @@ class FieldResolver:
 
     @staticmethod
     def __parse_field_path(
-        field_path: str | list[Union[str, QueryParser]]
+        field_path: str | list[Union[str, QueryParser]],
     ) -> list[Union[str, QueryParser]]:
         return (
             field_path
@@ -493,11 +630,6 @@ class FieldResolver:
     ) -> dict[str, Any]:
         variables = {} if not fallback_values else {**fallback_values}
         resolved_vars = self.resolve_variables(doc, warning_on=not allow_fail)
-        resolved_vars = {
-            k: [i for i in v if i and i is not FIELD_NOT_PRESENT]
-            for k, v in resolved_vars.items()
-            if v
-        }
         variables.update(resolved_vars)
         return variables
 
@@ -509,7 +641,19 @@ class FieldResolver:
         minimal_runs: int = 1,
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
-    ) -> Any:
+    ) -> None:
+        """
+        Execute a function on each field matching the FieldPath expression.
+        :argument doc: The dictionary that the expression is evaluated on.
+        :argument func: The function to run on each occurrence.
+        :argument field_path: The FieldPath expression to locate all fields.
+        :argument minimal_runs: If the number of executions of the function
+        is not met, this method raises an Assertion Error.
+        :argument fallback_variables: Variable values resolved previously in
+        the format {"var_name": [var_value1, var_value2,...]}
+        :argument create_nonexistent: If the path does not exist yet, should
+        this function create it? Useful for document creation.
+        """
         ran_on = set()
 
         self._run_on_path(
@@ -532,18 +676,31 @@ class FieldResolver:
         field_path: str | list[Union[str, QueryParser]],
         fallback_variables: dict[str, Any],
     ) -> list[str]:
-        paths = set()
-        self._run_on_path(
-            doc,
-            self.__parse_field_path(field_path),
-            self.__populate_variables(doc, fallback_variables),
-            "",
-            lambda _: None,
-            False,
-            paths,
-            False,
-        )
-        return list(paths)
+        """
+        Get paths to occurrences of fields matching the general expressions.
+        Returns a list of concrete expressions (all indexes in a list are returned
+        separately).
+        :argument doc: The document to evaluate this expression on.
+        :argument field_path: The FieldPath expression.
+        :argument fallback_variables: The already-resolved variable values in
+        the format {"var_name": [var_value1, var_value2,...]}
+        :return: a list of concrete occurrences (paths in the string format).
+        """
+        try:
+            paths = set()
+            self._run_on_path(
+                doc,
+                self.__parse_field_path(field_path),
+                self.__populate_variables(doc, fallback_variables),
+                "",
+                lambda _: None,
+                False,
+                paths,
+                False,
+            )
+            return list(paths)
+        except FieldNotPresentError:
+            return []
 
     def get_objects(
         self,
@@ -552,20 +709,33 @@ class FieldResolver:
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
     ) -> list[Any]:
+        """
+        Gets all fields matching the FieldPath expression.
+        :argument doc: The document the expression is evaluated on.
+        :argument field_path: The FieldPath expression.
+        :argument fallback_variables: Already resolved variable values in
+        the format {"var_name": [var_value1, var_value2,...]}.
+        :argument create_nonexistent: If the fields do not exist already,
+        should they be created? Useful for document creation.
+        :return: A list of field values.
+        """
         ans = []
 
         def add_to_ans(item: Any) -> None:
             ans.append(item)
 
-        self.run_func(
-            doc,
-            add_to_ans,
-            field_path,
-            minimal_runs=0,
-            fallback_variables=fallback_variables,
-            create_nonexistent=create_nonexistent,
-        )
-        return ans
+        try:
+            self.run_func(
+                doc,
+                add_to_ans,
+                field_path,
+                minimal_runs=0,
+                fallback_variables=fallback_variables,
+                create_nonexistent=create_nonexistent,
+            )
+            return ans
+        except FieldNotPresentError:
+            return []
 
     def get_mutable_parent(
         self,
@@ -574,6 +744,7 @@ class FieldResolver:
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
     ) -> list[Any]:
+        """Fetches the parent of the last expression. Useful for document mutations."""
         path = self.__parse_field_path(field_path)
         if create_nonexistent:
             # create parents
@@ -588,6 +759,7 @@ class FieldResolver:
         to_insert: Any,
         fallback_variables: dict[str, Any] | None = None,
     ) -> None:
+        """Inserts the value at the given path."""
         objects_to_mutate = self.get_mutable_parent(
             doc, field_path, fallback_variables, True
         )
@@ -602,4 +774,7 @@ class FieldResolver:
             if isinstance(last_step, str):
                 obj[last_step] = to_insert
             elif isinstance(last_step, QueryParser):
-                obj.append(to_insert)
+                if isinstance(to_insert, list):
+                    obj.extend(to_insert)
+                else:
+                    obj.append(to_insert)

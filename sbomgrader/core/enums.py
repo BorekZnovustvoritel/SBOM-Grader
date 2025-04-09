@@ -12,8 +12,8 @@ class ResultType(Enum):
     @staticmethod
     def get_visual(res_type: "ResultType") -> str:
         mapping = {
-            ResultType.SUCCESS: "\N{check mark}",
-            ResultType.FAILED: "\N{cross mark}",
+            ResultType.SUCCESS: "\N{CHECK MARK}",
+            ResultType.FAILED: "\N{CROSS MARK}",
             ResultType.ERROR: "!",
             ResultType.SKIPPED: "\N{RIGHT-SIDE ARC CLOCKWISE ARROW}",
             ResultType.NOT_PRESENT: "??",
@@ -77,6 +77,9 @@ class QueryType(Enum):
     ANY = "|"
     EQ = "="
     NEQ = "!="
+    CONTAINS = "%"
+    NOT_CONTAINS = "!%"
     STARTSWITH = "%="
     ENDSWITH = "=%"
+    RELATIVE = "@"
     INDEX = ""

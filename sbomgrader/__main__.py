@@ -38,7 +38,7 @@ class GradeConfig:
     def from_args(args: Namespace) -> "GradeConfig":
         return GradeConfig(
             input_file=args.input,
-            cookbook_references=args.cookbook,
+            cookbook_references=args.cookbook or [],
             content_type=args.content_type,
             sbom_type=args.sbom_type,
             passing_grade=args.passing_grade,
@@ -118,7 +118,7 @@ def grade(config: GradeConfig) -> None:
         markdown = Markdown(result.output(output_type))
         console.print(markdown)
     else:
-        console.print(result.output(output_type), output_type.value)
+        console.print(result.output(output_type))
     if validation_passed(result.grade, Grade(config.passing_grade)):
         exit(0)
     exit(1)
@@ -135,7 +135,7 @@ class ConvertConfig:
         return ConvertConfig(
             input_file=args.input,
             output_format=args.output_format,
-            custom_maps=args.custom_map,
+            custom_maps=args.custom_map or [],
         )
 
 

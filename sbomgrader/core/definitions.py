@@ -19,6 +19,8 @@ FORMAT_FILE_PATH = ROOT_DIR / "formats" / "formats.yml"
 FORMAT_VALIDATION_SCHEMA_PATH = ROOT_DIR / "formats" / "schema" / "formats_schema.yml"
 COOKBOOK_EXTENSIONS = {".yml", ".yaml"}
 
+TIME_ISO_FORMAT_STRING = "%Y-%m-%dT%H:%M:%SZ"
+
 MAX_ITEM_PREVIEW_LENGTH = 50
 START_PREVIEW_CHARS = 25
 END_PREVIEW_CHARS = 20
@@ -26,6 +28,8 @@ VAR_REF_REGEX = r"\${(?P<var_id>[^}]+)}"
 
 
 class __FieldNotPresent:
+    string_repr = "FIELD_NOT_PRESENT"
+
     def __repr__(self):
         return "Field not present."
 

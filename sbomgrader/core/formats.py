@@ -39,4 +39,5 @@ SBOMFormat, SBOM_FORMAT_DEFINITION_MAPPING, SBOM_FORMAT_FALLBACK = _load_formats
 
 
 def get_fallbacks(format_: SBOMFormat) -> set[SBOMFormat]:
+    """Get formats that are considered a fallback for the provided format."""
     return SBOM_FORMAT_FALLBACK[format_]
