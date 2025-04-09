@@ -40,11 +40,24 @@ properties:
           description: Path to data in the second SBOM type.
       required:
         - name
-        - firstData
-        - secondData
         - firstFieldPath
         - secondFieldPath
+      anyOf:
+        - required:
+            - firstData
+        - required:
+            - secondData
       additionalProperties: false
+
+  firstPreprocessing:
+    $ref: "#/$defs/processing"
+  secondPreprocessing:
+    $ref: "#/$defs/processing"
+  firstPostprocessing:
+    $ref: "#/$defs/processing"
+  secondPostprocessing:
+    $ref: "#/$defs/processing"
+
 additionalProperties: false
 required:
   - first
@@ -68,3 +81,8 @@ $defs:
         - fieldPath
       additionalProperties: false
     description: Variables are populated from the other format.
+  processing:
+    type: array
+    items:
+      type: string
+    additionalProperties: false

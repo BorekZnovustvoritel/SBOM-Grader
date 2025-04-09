@@ -1,5 +1,6 @@
 import json
 from functools import cached_property
+from pathlib import Path
 from typing import Any
 
 from sbomgrader.core.enums import SBOMType
@@ -8,6 +9,7 @@ from sbomgrader.core.formats import (
     SBOMFormat,
     get_fallbacks,
 )
+from sbomgrader.core.utils import get_mapping
 
 
 class Document:
@@ -101,3 +103,14 @@ class Document:
     @property
     def json_dump(self) -> str:
         return json.dumps(self._doc, indent=4)
+
+    @staticmethod
+    def from_file(path_to_file: str | Path) -> "Document":
+        path_to_file = Path(path_to_file)
+        mapping = get_mapping(path_to_file)
+        if not mapping:
+            raise ValueError(
+                f"It seems that file {path_to_file.absolute()} does not contain a valid mapping."
+                f"Please make sure a valid json or yaml file is provided."
+            )
+        return Document(get_mapping(path_to_file))

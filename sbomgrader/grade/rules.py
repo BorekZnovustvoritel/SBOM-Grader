@@ -165,12 +165,16 @@ class RuleSet:
                 operation = next(iter(checker.keys()))
 
                 check_against = checker[operation]
-                if check_against == "FIELD_NOT_PRESENT":
+                if check_against == FIELD_NOT_PRESENT.string_repr:
                     check_against = FIELD_NOT_PRESENT
                 elif isinstance(check_against, list):
-                    contains_field_not_present = "FIELD_NOT_PRESENT" in check_against
+                    contains_field_not_present = (
+                        FIELD_NOT_PRESENT.string_repr in check_against
+                    )
                     check_against = [
-                        item for item in check_against if item != "FIELD_NOT_PRESENT"
+                        item
+                        for item in check_against
+                        if item != FIELD_NOT_PRESENT.string_repr
                     ]
                     if contains_field_not_present:
                         check_against.append(FIELD_NOT_PRESENT)
