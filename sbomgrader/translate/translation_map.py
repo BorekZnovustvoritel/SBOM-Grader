@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import yaml
 
@@ -255,24 +255,23 @@ class TranslationMap:
         preprocessing_dict = {}
         postprocessing_dict = {}
         for dict_of_functions, kind in (
-            (
-                preprocessing_dict,
-                "Preprocessing",
-            ),
+            (preprocessing_dict, "Preprocessing"),
             (postprocessing_dict, "Postprocessing"),
         ):
             # Load both preprocessing and postprocessing functions
-            for first_or_second, form in ("first", first), ("second", second):
+            for first_or_second, sbom_format in ("first", first), ("second", second):
                 # Load both the functions for the first and the second format
                 required_funcs = schema_dict.get(f"{first_or_second}{kind}", [])
                 if not required_funcs:
                     # There are no functions required by the TranslationMap
                     continue
-                dict_of_functions[form] = []
-                py_file = get_path_to_module(file, kind, first_or_second, form)
+                dict_of_functions[sbom_format] = []
+                py_file = get_path_to_module(file, kind, first_or_second, sbom_format)
                 python_loader = PythonLoader(py_file)
                 for func_name in required_funcs:
-                    dict_of_functions[form].append(python_loader.load_func(func_name))
+                    dict_of_functions[sbom_format].append(
+                        python_loader.load_func(func_name)
+                    )
 
         return TranslationMap(
             first,
