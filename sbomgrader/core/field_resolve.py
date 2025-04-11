@@ -279,7 +279,21 @@ class Variable:
     @property
     def is_relative(self) -> bool:
         """Does the definition of this Variable contain a relative path?"""
-        return self.raw_field_path.startswith("@") or "[@]" in self.raw_field_path
+        return self.is_fully_relative or self.is_partially_relative
+
+    @property
+    def is_fully_relative(self):
+        return self.raw_field_path.startswith("@")
+
+    @property
+    def is_partially_relative(self):
+        return "[@]" in self.raw_field_path
+
+    @property
+    def without_relative_start(self) -> "Variable":
+        if not self.is_fully_relative:
+            return self
+        return Variable(self.name, self.path_parser.raw_path.removeprefix("@."))
 
     def __hash__(self):
         return self.name.__hash__()
@@ -313,6 +327,17 @@ class FieldResolver:
     @property
     def relative_variables(self) -> dict[str, Variable]:
         """Returns just variables with a relative path definition."""
+        return {
+            key: val for key, val in self._uninitialized_vars.items() if val.is_relative
+        }
+
+    @property
+    def fully_relative_variables(self) -> dict[str, Variable]:
+        """
+        Returns just variables with a fully relative path definition.
+        (Their path starts with a '@', they search through
+         direct descendants of the relative path).
+        """
         return {
             key: val for key, val in self._uninitialized_vars.items() if val.is_relative
         }
@@ -379,7 +404,7 @@ class FieldResolver:
 
             resolved_variables[var_name] = []
 
-            def add_to_variable(value: Any) -> None:
+            def add_to_variable(value: Any, _) -> None:
                 resolved_variables[var_name].append(value)
 
             path = vars_to_resolve[var_name].path_parser.parse(path_to_instance)
@@ -391,7 +416,6 @@ class FieldResolver:
                     "",
                     add_to_variable,
                     False,
-                    set(),
                 )
             except Exception as e:
                 if warning_on:
@@ -428,9 +452,8 @@ class FieldResolver:
         path: list[str | QueryParser | PathParser],
         variable_values: dict[str, Any],
         path_tried: str,
-        func_to_run: Callable[[Any], Any],
+        func_to_run: Callable[[Any, str], Any],
         accept_not_present_field: bool,
-        ran_on: set[str],
         create_nonexistent: bool = False,
     ):
         """
@@ -442,8 +465,7 @@ class FieldResolver:
         if not path or doc_ is FIELD_NOT_PRESENT:
             # The path has ended
             try:
-                resp = func_to_run(doc_)
-                ran_on.add(path_tried)
+                resp = func_to_run(doc_, path_tried)
                 assert resp is True or resp is None
             except Exception as e:
                 item_str = str(doc_)
@@ -477,7 +499,6 @@ class FieldResolver:
                         path_tried,
                         func_to_run,
                         accept_not_present_field,
-                        ran_on,
                         create_nonexistent,
                     )
             else:
@@ -490,7 +511,6 @@ class FieldResolver:
                     path_tried + f".{step}",
                     func_to_run,
                     accept_not_present_field,
-                    ran_on,
                     create_nonexistent,
                 )
         elif isinstance(step, QueryParser):
@@ -558,7 +578,7 @@ class FieldResolver:
                             )
                         else:
                             func = lambda x: isinstance(x, str) and query.value not in x
-                    final_func = lambda x: (
+                    final_func = lambda x, _: (
                         to_use_in_query.add(idx) if func(x) else None
                     )
                     parsed_path = (
@@ -571,7 +591,6 @@ class FieldResolver:
                         path_tried + f"[{idx}]",
                         final_func,
                         True,
-                        set(),
                         create_nonexistent,
                     )
                     to_use.append(to_use_in_query)
@@ -591,7 +610,6 @@ class FieldResolver:
                             path_tried + f"[{idx}]",
                             func_to_run,
                             accept_not_present_field,
-                            ran_on,
                             create_nonexistent,
                         )
                     except (AssertionError, FieldNotPresentError) as e:
@@ -608,7 +626,6 @@ class FieldResolver:
                         path_tried + f"[{idx}]",
                         func_to_run,
                         accept_not_present_field,
-                        ran_on,
                         create_nonexistent,
                     )
 
@@ -627,10 +644,13 @@ class FieldResolver:
         doc: dict[str, Any],
         fallback_values: dict[str, Any],
         allow_fail: bool = False,
+        prefer_fallback: bool = False,
     ) -> dict[str, Any]:
+        args = {"whole_doc": doc, "warning_on": not allow_fail}
+        if prefer_fallback:
+            args["already_resolved_variables"] = fallback_values
         variables = {} if not fallback_values else {**fallback_values}
-        resolved_vars = self.resolve_variables(doc, warning_on=not allow_fail)
-        variables.update(resolved_vars)
+        variables.update(self.resolve_variables(**args))
         return variables
 
     def run_func(
@@ -656,14 +676,17 @@ class FieldResolver:
         """
         ran_on = set()
 
+        def adjusted_func(value: Any, path: str) -> None:
+            ran_on.add(path)
+            func(value)
+
         self._run_on_path(
             doc,
             self.__parse_field_path(field_path),
             self.__populate_variables(doc, fallback_variables, create_nonexistent),
             "",
-            func,
+            adjusted_func,
             create_nonexistent,
-            ran_on,
             create_nonexistent,
         )
         assert (
@@ -675,6 +698,7 @@ class FieldResolver:
         doc: dict[str, Any],
         field_path: str | list[Union[str, QueryParser]],
         fallback_variables: dict[str, Any],
+        prefer_fallback: bool = False,
     ) -> list[str]:
         """
         Get paths to occurrences of fields matching the general expressions.
@@ -684,6 +708,8 @@ class FieldResolver:
         :argument field_path: The FieldPath expression.
         :argument fallback_variables: The already-resolved variable values in
         the format {"var_name": [var_value1, var_value2,...]}
+        :argument prefer_fallback: If set to `True`, fallback variables will not be overridden.
+        This improves performance. Default is `False`.
         :return: a list of concrete occurrences (paths in the string format).
         """
         try:
@@ -691,11 +717,10 @@ class FieldResolver:
             self._run_on_path(
                 doc,
                 self.__parse_field_path(field_path),
-                self.__populate_variables(doc, fallback_variables),
+                self.__populate_variables(doc, fallback_variables, prefer_fallback),
                 "",
-                lambda _: None,
+                lambda _, path: paths.add(path),
                 False,
-                paths,
                 False,
             )
             return list(paths)
@@ -737,6 +762,39 @@ class FieldResolver:
         except FieldNotPresentError:
             return []
 
+    def get_paths_and_objects(
+        self,
+        doc: dict[str, Any],
+        field_path: str | list[Union[str, QueryParser]],
+        fallback_variables: dict[str, list[Any]],
+    ) -> dict[str, Any]:
+        """
+        Retrieves a dictionary of absolute paths and values
+        on these paths according to
+
+        """
+        resolved_variables = self.__populate_variables(
+            doc,
+            fallback_variables,
+            allow_fail=True,
+            prefer_fallback=True,
+        )
+        ans = {}
+
+        def extend_ans(value: Any, path: str):
+            ans[path] = value
+
+        self._run_on_path(
+            doc,
+            self.__parse_field_path(field_path),
+            resolved_variables,
+            "",
+            extend_ans,
+            False,
+            False,
+        )
+        return ans
+
     def get_mutable_parent(
         self,
         doc: dict[str, Any],
@@ -759,6 +817,7 @@ class FieldResolver:
         to_insert: Any,
         fallback_variables: dict[str, Any] | None = None,
     ) -> None:
+        # TODO rework this to improve speed
         """Inserts the value at the given path."""
         objects_to_mutate = self.get_mutable_parent(
             doc, field_path, fallback_variables, True

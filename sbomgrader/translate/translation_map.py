@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable
 
 import yaml
 
@@ -43,8 +43,9 @@ class Data:
 
     def render(
         self,
-        doc: Document,
-        path_to_instance: str | None = None,
+        whole_doc: Document,
+        path_to_instance: str | None,
+        instance_value: Any,
         prune_empty: bool = True,
         globally_resolved_variables: dict[str, list[Any]] = None,
     ) -> Any:
@@ -53,10 +54,22 @@ class Data:
         populated from the document.
         """
         globally_resolved_variables = globally_resolved_variables or {}
+        already_resolved_vars = {**globally_resolved_variables}
+        relative_resolver = FieldResolver(
+            {
+                var_name: var.without_relative_start
+                for var_name, var in self.field_resolver.fully_relative_variables.items()
+            }
+        )
+        already_resolved_vars.update(
+            relative_resolver.resolve_variables(
+                instance_value, already_resolved_variables=already_resolved_vars
+            )
+        )
         resolved_variables = self.field_resolver.resolve_variables(
-            doc.doc,
+            whole_doc.doc,
             path_to_instance,
-            already_resolved_variables=globally_resolved_variables,
+            already_resolved_variables=already_resolved_vars,
         )
         # Remove invalid values
         for var_name, var_val in resolved_variables.items():
@@ -127,11 +140,11 @@ class Chunk:
 
     def occurrences(
         self, doc: Document, fallback_variables: dict[str, Any] = None
-    ) -> list[str]:
+    ) -> dict[str, Any]:
         """Returns a list of string fieldPaths where the element occurs."""
         fallback_variables = fallback_variables or {}
         resolver = self.resolver_for(doc.sbom_format)
-        return resolver.get_paths(
+        return resolver.get_paths_and_objects(
             doc.doc, self.field_path_for(doc.sbom_format), fallback_variables
         )
 
@@ -165,9 +178,14 @@ class Chunk:
         if not relevant_data:
             # This chunk does not specify anything for this direction
             return
-        for chunk_occurrence in self.occurrences(orig_doc, globally_resolved_variables):
+        for occurrence_path, occurrence_value in self.occurrences(
+            orig_doc, globally_resolved_variables
+        ).items():
             rendered_data = relevant_data.render(
-                orig_doc, chunk_occurrence, globally_resolved_variables=global_vars
+                orig_doc,
+                occurrence_path,
+                occurrence_value,
+                globally_resolved_variables=global_vars,
             )
             if not should_remove(rendered_data):
                 appender_resolver.insert_at_path(new_doc, append_path, rendered_data)
@@ -357,3 +375,21 @@ class TranslationMap:
         if override_format is not None:
             new_data.update(SBOM_FORMAT_DEFINITION_MAPPING[override_format])
         return Document(new_data)
+
+    def is_exact_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if this map converts between these two formats."""
+        return ((from_ is self.first) and (to is self.second)) or (
+            (from_ is self.second) and (to is self.first)
+        )
+
+    def is_suitable_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if the map is able to convert between formats including fallbacks."""
+        if self.is_exact_map(from_, to):
+            return True
+        from_fallbacks = get_fallbacks(from_)
+        from_fallbacks.add(from_)
+        to_fallbacks = get_fallbacks(to)
+        to_fallbacks.add(to)
+        return (self.first in from_fallbacks and self.second in to_fallbacks) or (
+            self.first in to_fallbacks and self.second in from_fallbacks
+        )
