@@ -1,11 +1,13 @@
 import datetime
 import json
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Literal
 
 import jinja2
 import yaml
 from jsonschema import validate
+from yaml import YAMLError
 
 from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import FIELD_NOT_PRESENT, TIME_ISO_FORMAT_STRING
@@ -21,9 +23,29 @@ def is_mapping(file: str | Path) -> bool:
 def get_mapping(
     schema: str | Path, validation_schema: str | Path | None = None
 ) -> dict | None:
-    """Load a mapping from a JSON/YAML file, optionally validate it with a JSONSchema."""
-    if isinstance(schema, str):
+    """
+    Load a mapping from a JSON/YAML file, optionally validate it with a JSONSchema.
+    This function can also load the mapping from a string.
+
+    :argument schema: The mapping to load. Can hold the string-serialized mapping
+    or a path to a JSON or YAML file.
+    :argument validation_schema: The JSONSchema used for validation of the first mapping.
+    """
+    doc = {}
+    try:
+        if isinstance(schema, str):
+            if schema.startswith("---"):
+                doc = yaml.safe_load(schema)
+            elif schema.startswith("{"):
+                doc = json.loads(schema)
+            else:
+                schema = Path(schema)
+    except (JSONDecodeError, YAMLError):
+        # Some people maybe really do name
+        # their files with names starting with '{'
+        # or '---'
         schema = Path(schema)
+
     if isinstance(schema, Path):
         if not schema.exists() or not is_mapping(schema):
             return None
@@ -32,8 +54,9 @@ def get_mapping(
                 doc = json.load(stream)
             elif schema.name.endswith(".yml") or schema.name.endswith(".yaml"):
                 doc = yaml.safe_load(stream)
-            else:
-                doc = {}
+
+    if not doc:
+        raise ValueError(f"Invalid mapping: '{schema}'.")
     if validation_schema:
         validate(doc, get_mapping(validation_schema))
     return doc

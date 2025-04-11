@@ -3,6 +3,7 @@ from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from pathlib import Path
 
+import click
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -17,17 +18,9 @@ from sbomgrader.translate.choose_map import choose_map, get_all_map_list_markdow
 from sbomgrader.translate.translation_map import TranslationMap
 
 
-def _file(arg: str) -> Path:
-    path = Path(arg)
-    if not path.exists():
-        print(f"File {arg} not found.", file=sys.stderr)
-        exit(1)
-    return path
-
-
 @dataclass
 class GradeConfig:
-    input_file: Path
+    input_file: Path | str
     cookbook_references: list[str]
     content_type: SBOMType
     sbom_type: SBOMTime
@@ -49,7 +42,7 @@ class GradeConfig:
 def create_grade_parser(parser: ArgumentParser):
     parser.add_argument(
         "input",
-        type=_file,
+        type=str,
         help="SBOM File to grade. Currently supports JSON.",
     )
     parser.add_argument(
@@ -142,7 +135,7 @@ class ConvertConfig:
 def create_convert_parser(parser: ArgumentParser):
     parser.add_argument(
         "input",
-        type=_file,
+        type=str,
         help="SBOM File to convert. Currently supports JSON.",
     )
     parser.add_argument(
@@ -155,7 +148,7 @@ def create_convert_parser(parser: ArgumentParser):
     parser.add_argument(
         "--custom-map",
         "-m",
-        type=_file,
+        type=str,
         help="Custom translation map file.",
         action="append",
     )
