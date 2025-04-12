@@ -1,7 +1,9 @@
+from functools import cached_property
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable
 
 import yaml
+from jinja2 import meta
 
 from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
@@ -12,6 +14,8 @@ from sbomgrader.core.documents import Document
 from sbomgrader.core.field_resolve import (
     Variable,
     FieldResolver,
+    QueryParser,
+    PathParser,
 )
 from sbomgrader.core.formats import (
     SBOMFormat,
@@ -40,11 +44,13 @@ class Data:
         self.field_resolver = FieldResolver(variables)
         self.transformer_path = transformer_path
         self.jinja_env = create_jinja_env(self.transformer_path)
+        self._variables_needed_in_template = self._get_vars_for_template()
 
     def render(
         self,
-        doc: Document,
-        path_to_instance: str | None = None,
+        whole_doc: Document,
+        path_to_instance: str | None,
+        instance_value: Any,
         prune_empty: bool = True,
         globally_resolved_variables: dict[str, list[Any]] = None,
     ) -> Any:
@@ -53,10 +59,23 @@ class Data:
         populated from the document.
         """
         globally_resolved_variables = globally_resolved_variables or {}
+        already_resolved_vars = {**globally_resolved_variables}
+        relative_resolver = FieldResolver(
+            {
+                var_name: var.without_relative_start
+                for var_name, var in self.field_resolver.fully_relative_variables.items()
+            }
+        )
+        already_resolved_vars.update(
+            relative_resolver.resolve_variables(
+                instance_value, already_resolved_variables=already_resolved_vars
+            )
+        )
         resolved_variables = self.field_resolver.resolve_variables(
-            doc.doc,
+            whole_doc.doc,
             path_to_instance,
-            already_resolved_variables=globally_resolved_variables,
+            already_resolved_variables=already_resolved_vars,
+            variables_needed=self._variables_needed_in_template,
         )
         # Remove invalid values
         for var_name, var_val in resolved_variables.items():
@@ -69,6 +88,11 @@ class Data:
         if prune_empty:
             data_value = prune(data_value)
         return data_value
+
+    def _get_vars_for_template(self) -> set[str]:
+        parsed_content = self.jinja_env.parse(self.template)
+        jinja_vars = meta.find_undeclared_variables(parsed_content)
+        return {var for var in jinja_vars if var not in self.jinja_env.globals}
 
 
 class Chunk:
@@ -127,13 +151,32 @@ class Chunk:
 
     def occurrences(
         self, doc: Document, fallback_variables: dict[str, Any] = None
-    ) -> list[str]:
+    ) -> dict[str, Any]:
         """Returns a list of string fieldPaths where the element occurs."""
         fallback_variables = fallback_variables or {}
         resolver = self.resolver_for(doc.sbom_format)
-        return resolver.get_paths(
+        return resolver.get_paths_and_objects(
             doc.doc, self.field_path_for(doc.sbom_format), fallback_variables
         )
+
+    @staticmethod
+    def __mutate_obj_by_inserting(
+        parent_obj: Any,
+        value_to_insert: Any,
+        last_step_field_path: str | QueryParser | None,
+    ) -> None:
+        if last_step_field_path is None:
+            # This is at the root level
+            parent_obj.update(value_to_insert)
+        if isinstance(last_step_field_path, str):
+            # We want to add to a dict
+            parent_obj[last_step_field_path] = value_to_insert
+        elif isinstance(last_step_field_path, QueryParser):
+            # We want to add to a list
+            if isinstance(value_to_insert, list):
+                parent_obj.extend(value_to_insert)
+            else:
+                parent_obj.append(value_to_insert)
 
     def convert_and_add(
         self,
@@ -142,7 +185,6 @@ class Chunk:
         globally_resolved_variables: dict[str, list[Any]] = None,
     ) -> None:
         """Mutates the new_doc with the occurrences of this chunk."""
-        globally_resolved_variables = globally_resolved_variables or {}
         convert_from = orig_doc.sbom_format
         if convert_from not in {self.first_format, self.second_format}:
             fallbacks = get_fallbacks(orig_doc.sbom_format)
@@ -155,22 +197,40 @@ class Chunk:
             if self.first_format != convert_from
             else self.second_format
         )
-        source_resolver = self.resolver_for(convert_from)
-        chunk_based_absolute_vars = source_resolver.resolve_variables(orig_doc.doc)
-        global_vars = {**globally_resolved_variables, **chunk_based_absolute_vars}
-
-        appender_resolver = self.resolver_for(convert_to)
-        append_path = self.field_path_for(convert_to)
         relevant_data = self.data_for(convert_to)
         if not relevant_data:
             # This chunk does not specify anything for this direction
             return
-        for chunk_occurrence in self.occurrences(orig_doc, globally_resolved_variables):
+        globally_resolved_variables = globally_resolved_variables or {}
+
+        source_resolver = self.resolver_for(convert_from)
+        chunk_based_absolute_vars = source_resolver.resolve_variables(orig_doc.doc)
+        global_vars = {**globally_resolved_variables, **chunk_based_absolute_vars}
+
+        # Resolve all info about the point where to insert data -- once
+        appender_resolver = self.resolver_for(convert_to)
+        append_path = appender_resolver.ensure_field_path(
+            self.field_path_for(convert_to)
+        )
+        last_insert_step = next(iter(append_path[-1:]), None)
+        mutable_parents = appender_resolver.get_mutable_parents(
+            new_doc, append_path, create_nonexistent=True
+        )
+
+        for occurrence_path, occurrence_value in self.occurrences(
+            orig_doc, globally_resolved_variables
+        ).items():
             rendered_data = relevant_data.render(
-                orig_doc, chunk_occurrence, globally_resolved_variables=global_vars
+                orig_doc,
+                occurrence_path,
+                occurrence_value,
+                globally_resolved_variables=global_vars,
             )
             if not should_remove(rendered_data):
-                appender_resolver.insert_at_path(new_doc, append_path, rendered_data)
+                for mutable_parent in mutable_parents:
+                    self.__mutate_obj_by_inserting(
+                        mutable_parent, rendered_data, last_insert_step
+                    )
 
 
 class TranslationMap:
@@ -357,3 +417,21 @@ class TranslationMap:
         if override_format is not None:
             new_data.update(SBOM_FORMAT_DEFINITION_MAPPING[override_format])
         return Document(new_data)
+
+    def is_exact_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if this map converts between these two formats."""
+        return ((from_ is self.first) and (to is self.second)) or (
+            (from_ is self.second) and (to is self.first)
+        )
+
+    def is_suitable_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if the map is able to convert between formats including fallbacks."""
+        if self.is_exact_map(from_, to):
+            return True
+        from_fallbacks = get_fallbacks(from_)
+        from_fallbacks.add(from_)
+        to_fallbacks = get_fallbacks(to)
+        to_fallbacks.add(to)
+        return (self.first in from_fallbacks and self.second in to_fallbacks) or (
+            self.first in to_fallbacks and self.second in from_fallbacks
+        )
