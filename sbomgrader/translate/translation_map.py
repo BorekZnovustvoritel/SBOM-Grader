@@ -1,7 +1,9 @@
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Callable
 
 import yaml
+from jinja2 import meta
 
 from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
@@ -42,6 +44,7 @@ class Data:
         self.field_resolver = FieldResolver(variables)
         self.transformer_path = transformer_path
         self.jinja_env = create_jinja_env(self.transformer_path)
+        self._variables_needed_in_template = self._get_vars_for_template()
 
     def render(
         self,
@@ -72,6 +75,7 @@ class Data:
             whole_doc.doc,
             path_to_instance,
             already_resolved_variables=already_resolved_vars,
+            variables_needed=self._variables_needed_in_template,
         )
         # Remove invalid values
         for var_name, var_val in resolved_variables.items():
@@ -84,6 +88,11 @@ class Data:
         if prune_empty:
             data_value = prune(data_value)
         return data_value
+
+    def _get_vars_for_template(self) -> set[str]:
+        parsed_content = self.jinja_env.parse(self.template)
+        jinja_vars = meta.find_undeclared_variables(parsed_content)
+        return {var for var in jinja_vars if var not in self.jinja_env.globals}
 
 
 class Chunk:

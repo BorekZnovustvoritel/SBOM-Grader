@@ -2,6 +2,7 @@ import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Union, Any, Callable
 
 
@@ -295,6 +296,15 @@ class Variable:
             return self
         return Variable(self.name, self.path_parser.raw_path.removeprefix("@."))
 
+    @cached_property
+    def dependencies(self) -> set[str]:
+        deps = {
+            match.group("var_id")
+            for match in re.finditer(VAR_REF_REGEX, self.raw_field_path)
+        }
+        assert self.name not in deps, f"Self referencing variable {self.name} found."
+        return deps
+
     def __hash__(self):
         return self.name.__hash__()
 
@@ -342,12 +352,32 @@ class FieldResolver:
             key: val for key, val in self._uninitialized_vars.items() if val.is_relative
         }
 
+    def __find_dependencies_for_subset(
+        self,
+        subset_of_variables: list[str],
+        already_resolved: set[str] | dict[str, Any],
+    ) -> set[str]:
+        """Returns dependencies for a subset of variables."""
+        to_resolve = set(subset_of_variables)
+        ans = set(already_resolved)
+        while to_resolve:
+            var_name = to_resolve.pop()
+            variable = self.var_definitions.get(var_name)
+            if not variable:
+                continue
+            for dep_name in variable.dependencies:
+                if dep_name not in ans:
+                    to_resolve.add(dep_name)
+            ans.add(var_name)
+        return ans
+
     def resolve_variables(
         self,
         whole_doc: dict[str, Any],
         path_to_instance: str | None = None,
         already_resolved_variables: dict[str, list[Any]] = None,
         warning_on: bool = True,
+        variables_needed: list[str] | set[str] = None,
     ) -> dict[str, list[Any]]:
         """
         Resolve dependencies.
@@ -358,32 +388,35 @@ class FieldResolver:
         :argument already_resolved_variables: Variable values resolved previously. Helps with
         performance.
         :argument warning_on: Should this function display a warning to the STDERR?
+        :argument variables_needed: Specify a subset of variables that need resolving.
         """
         already_resolved_variables = already_resolved_variables or {}
-        # first resolve dependency tree for variables
-        dependencies = {}
-        if path_to_instance:
-            vars_to_resolve = self._uninitialized_vars
+        if not variables_needed:
+            # first resolve dependency tree for variables
+            if path_to_instance:
+                vars_to_resolve = self._uninitialized_vars
+            else:
+                vars_to_resolve = self.absolute_variables
+            vars_to_resolve = {
+                k: v
+                for k, v in vars_to_resolve.items()
+                if k not in already_resolved_variables
+            }
         else:
-            vars_to_resolve = self.absolute_variables
-        vars_to_resolve = {
-            k: v
-            for k, v in vars_to_resolve.items()
-            if k not in already_resolved_variables
+            vars_to_resolve = {
+                k: self.var_definitions[k]
+                for k in self.__find_dependencies_for_subset(
+                    variables_needed, already_resolved_variables
+                )
+            }
+        dependencies: dict[str, set[str]] = {
+            var_name: {
+                dep
+                for dep in variable_def.dependencies
+                if dep not in already_resolved_variables
+            }
+            for var_name, variable_def in vars_to_resolve.items()
         }
-        for variable in vars_to_resolve.values():
-            depends_on_vars = {
-                match.group("var_id")
-                for match in re.finditer(VAR_REF_REGEX, variable.raw_field_path)
-            }
-            dependencies[variable.name] = {
-                varname
-                for varname in depends_on_vars
-                if varname not in already_resolved_variables
-            }
-            assert (
-                variable.name not in dependencies[variable.name]
-            ), f"Self referencing variable {variable.name} found."
         resolved_variables: dict[str, list] = {**already_resolved_variables}
         while not all(var_name in resolved_variables for var_name in dependencies):
             # Get a var with no dependencies
