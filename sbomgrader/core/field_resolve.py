@@ -630,9 +630,10 @@ class FieldResolver:
                     )
 
     @staticmethod
-    def __parse_field_path(
+    def ensure_field_path(
         field_path: str | list[Union[str, QueryParser]],
     ) -> list[Union[str, QueryParser]]:
+        """Makes sure the FieldPath is in the parsed format."""
         return (
             field_path
             if isinstance(field_path, list)
@@ -682,7 +683,7 @@ class FieldResolver:
 
         self._run_on_path(
             doc,
-            self.__parse_field_path(field_path),
+            self.ensure_field_path(field_path),
             self.__populate_variables(doc, fallback_variables, create_nonexistent),
             "",
             adjusted_func,
@@ -716,7 +717,7 @@ class FieldResolver:
             paths = set()
             self._run_on_path(
                 doc,
-                self.__parse_field_path(field_path),
+                self.ensure_field_path(field_path),
                 self.__populate_variables(doc, fallback_variables, prefer_fallback),
                 "",
                 lambda _, path: paths.add(path),
@@ -786,7 +787,7 @@ class FieldResolver:
 
         self._run_on_path(
             doc,
-            self.__parse_field_path(field_path),
+            self.ensure_field_path(field_path),
             resolved_variables,
             "",
             extend_ans,
@@ -795,7 +796,7 @@ class FieldResolver:
         )
         return ans
 
-    def get_mutable_parent(
+    def get_mutable_parents(
         self,
         doc: dict[str, Any],
         field_path: str | list[Union[str, QueryParser]],
@@ -803,37 +804,9 @@ class FieldResolver:
         create_nonexistent: bool = False,
     ) -> list[Any]:
         """Fetches the parent of the last expression. Useful for document mutations."""
-        path = self.__parse_field_path(field_path)
+        path = self.ensure_field_path(field_path)
         if create_nonexistent:
             # create parents
             self.get_objects(doc, path, fallback_variables, create_nonexistent)
         # fetch parents
         return self.get_objects(doc, path[:-1], fallback_variables, create_nonexistent)
-
-    def insert_at_path(
-        self,
-        doc: dict[str, Any],
-        field_path: str | list[Union[str, QueryParser]],
-        to_insert: Any,
-        fallback_variables: dict[str, Any] | None = None,
-    ) -> None:
-        # TODO rework this to improve speed
-        """Inserts the value at the given path."""
-        objects_to_mutate = self.get_mutable_parent(
-            doc, field_path, fallback_variables, True
-        )
-        if isinstance(field_path, list):
-            last_step_list = field_path[-1:]
-        else:
-            last_step_list = PathParser(field_path).parse()[-1:]
-        last_step = next(iter(last_step_list), None)
-        for obj in objects_to_mutate:
-            if last_step is None:
-                obj.update(to_insert)
-            if isinstance(last_step, str):
-                obj[last_step] = to_insert
-            elif isinstance(last_step, QueryParser):
-                if isinstance(to_insert, list):
-                    obj.extend(to_insert)
-                else:
-                    obj.append(to_insert)

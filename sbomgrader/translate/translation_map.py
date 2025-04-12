@@ -12,6 +12,8 @@ from sbomgrader.core.documents import Document
 from sbomgrader.core.field_resolve import (
     Variable,
     FieldResolver,
+    QueryParser,
+    PathParser,
 )
 from sbomgrader.core.formats import (
     SBOMFormat,
@@ -148,6 +150,25 @@ class Chunk:
             doc.doc, self.field_path_for(doc.sbom_format), fallback_variables
         )
 
+    @staticmethod
+    def __mutate_obj_by_inserting(
+        parent_obj: Any,
+        value_to_insert: Any,
+        last_step_field_path: str | QueryParser | None,
+    ) -> None:
+        if last_step_field_path is None:
+            # This is at the root level
+            parent_obj.update(value_to_insert)
+        if isinstance(last_step_field_path, str):
+            # We want to add to a dict
+            parent_obj[last_step_field_path] = value_to_insert
+        elif isinstance(last_step_field_path, QueryParser):
+            # We want to add to a list
+            if isinstance(value_to_insert, list):
+                parent_obj.extend(value_to_insert)
+            else:
+                parent_obj.append(value_to_insert)
+
     def convert_and_add(
         self,
         orig_doc: Document,
@@ -155,7 +176,6 @@ class Chunk:
         globally_resolved_variables: dict[str, list[Any]] = None,
     ) -> None:
         """Mutates the new_doc with the occurrences of this chunk."""
-        globally_resolved_variables = globally_resolved_variables or {}
         convert_from = orig_doc.sbom_format
         if convert_from not in {self.first_format, self.second_format}:
             fallbacks = get_fallbacks(orig_doc.sbom_format)
@@ -168,16 +188,26 @@ class Chunk:
             if self.first_format != convert_from
             else self.second_format
         )
-        source_resolver = self.resolver_for(convert_from)
-        chunk_based_absolute_vars = source_resolver.resolve_variables(orig_doc.doc)
-        global_vars = {**globally_resolved_variables, **chunk_based_absolute_vars}
-
-        appender_resolver = self.resolver_for(convert_to)
-        append_path = self.field_path_for(convert_to)
         relevant_data = self.data_for(convert_to)
         if not relevant_data:
             # This chunk does not specify anything for this direction
             return
+        globally_resolved_variables = globally_resolved_variables or {}
+
+        source_resolver = self.resolver_for(convert_from)
+        chunk_based_absolute_vars = source_resolver.resolve_variables(orig_doc.doc)
+        global_vars = {**globally_resolved_variables, **chunk_based_absolute_vars}
+
+        # Resolve all info about the point where to insert data -- once
+        appender_resolver = self.resolver_for(convert_to)
+        append_path = appender_resolver.ensure_field_path(
+            self.field_path_for(convert_to)
+        )
+        last_insert_step = next(iter(append_path[-1:]), None)
+        mutable_parents = appender_resolver.get_mutable_parents(
+            new_doc, append_path, create_nonexistent=True
+        )
+
         for occurrence_path, occurrence_value in self.occurrences(
             orig_doc, globally_resolved_variables
         ).items():
@@ -188,7 +218,10 @@ class Chunk:
                 globally_resolved_variables=global_vars,
             )
             if not should_remove(rendered_data):
-                appender_resolver.insert_at_path(new_doc, append_path, rendered_data)
+                for mutable_parent in mutable_parents:
+                    self.__mutate_obj_by_inserting(
+                        mutable_parent, rendered_data, last_insert_step
+                    )
 
 
 class TranslationMap:
