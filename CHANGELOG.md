@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.1.3...v0.2.0) (2025-04-13)
+
+
+### Features
+
+* Add SBOM Converter. ([#19](https://github.com/BorekZnovustvoritel/SBOM-Grader/issues/19)) ([e335c23](https://github.com/BorekZnovustvoritel/SBOM-Grader/commit/e335c23e6ffa5e4cee6d72c63effc11c6b8f0273))
+
 ## [0.1.3](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.1.2...v0.1.3) (2024-12-04)
 
 
