@@ -83,8 +83,6 @@ chunks:
         fieldPath: metadata.timestamp
       - name: tools
         fieldPath: metadata.?.tools.?.components[|]
-      - name: tools_backup
-        fieldPath: metadata.?.tools[|]
       - name: supplier
         fieldPath: metadata.supplier.name
       - name: component_supplier
@@ -110,7 +108,7 @@ chunks:
 
         creators:
 
-          {% for tool in tools | fallback(tools_backup) %}
+          {% for tool in tools %}
 
           {% set tool_str = tool.name ~ ' ' ~ tool.version %}
 
@@ -419,10 +417,10 @@ chunks:
       packageFileName: {{ TODO }} # Does not work right now
 
       licenseDeclared: {{ licenses_declared  |
-      fallback(licenses_declared_fallback) | unwrap }}
+      unify(licenses_declared_fallback) | unwrap }}
 
       licenseConcluded: {{ licenses_concluded  |
-      fallback(licenses_concluded_fallback) | unwrap }}
+      unify(licenses_concluded_fallback, license_expressions) | unwrap }}
 
       externalRefs:
 
@@ -495,17 +493,20 @@ chunks:
         fieldPath: '@.?.publisher'
       - name: licenses_declared
         fieldPath: >-
-          @.?.licenses[license.?.acknowledgement=declared]license.?.id
+          @.?.licenses[?.license.?.acknowledgement=declared]license.?.id
       - name: licenses_declared_fallback
         fieldPath: >-
-          @.?.licenses[license.?.acknowledgement=declared,id=FIELD_NOT_PRESENT]
+          @.?.licenses[?.license.?.acknowledgement=declared,id=FIELD_NOT_PRESENT]
           license.?.name
       - name: licenses_concluded
-        fieldPath: '@.?.licenses[license.acknowledgement!=declared]license.?.id'
+        fieldPath: >-
+          @.?.licenses[?.license.acknowledgement!=declared]license.?.id
       - name: licenses_concluded_fallback
         fieldPath: >-
-          @.?.licenses[license.acknowledgement!=declared,id=FIELD_NOT_PRESENT]
+          @.?.licenses[?.license.acknowledgement!=declared,id=FIELD_NOT_PRESENT]
           license.?.name
+      - name: license_expressions
+        fieldPath: '@.?.licenses[?.expression!=]expression'
       - name: purl
         fieldPath: '@.?.purl'
       - name: hashes

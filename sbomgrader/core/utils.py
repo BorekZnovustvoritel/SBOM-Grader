@@ -156,6 +156,17 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
             return []
         return input_list[start:end]
 
+    def unify(first: list[Any], *other: list[Any]) -> list[Any]:
+        """Return union"""
+        ans = []
+        if isinstance(first, list):
+            ans.extend(first)
+        for o in other:
+            if isinstance(o, list):
+                ans.extend(o)
+
+        return ans
+
     def fallback(first: list[Any], *other: list[Any]) -> list[Any]:
         """Return the first non-empty variable value (non-empty list)."""
         if first and first is not FIELD_NOT_PRESENT:
@@ -168,6 +179,7 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
     env.filters["unwrap"] = unwrap
     env.filters["slice"] = sliced
     env.filters["fallback"] = fallback
+    env.filters["unify"] = unify
     if transformer_file and transformer_file.exists():
 
         def func(item: Any, name: str, **kwargs) -> Any:
