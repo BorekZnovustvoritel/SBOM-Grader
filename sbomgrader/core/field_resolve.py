@@ -132,6 +132,15 @@ class PathParser:
         """The original string containing the path."""
         return self._path
 
+    @property
+    def variable_references(self) -> set[str]:
+        parsed_path = self.parse()
+        ans = set()
+        for step in parsed_path:
+            if isinstance(step, QueryParser):
+                ans.update(step.variable_references)
+        return ans
+
 
 @dataclass
 class Query:
@@ -243,6 +252,17 @@ class QueryParser:
             queries.append(query)
         self.ans[relative_path_index] = queries
         return queries
+
+    @property
+    def variable_references(self) -> set[str]:
+        parsed_queries = self.parse()
+        ans = set()
+        for query in parsed_queries:
+            if var_name := query.variable:
+                ans.add(var_name)
+            if sub_path_parser := query.field_path:
+                ans.update(sub_path_parser.variable_references)
+        return ans
 
     @staticmethod
     def _load_val(value: str) -> Any:
@@ -502,6 +522,11 @@ class FieldResolver:
     def __cast_vars_to_sets(
         variables: dict[str, list[Any]],
     ) -> dict[str, list[Any] | set[Any]]:
+        """
+        Tries to convert lists of values to
+        sets of values. Leaves the original value
+        if it contains unhashable objects.
+        """
         new_variables = {}
         for var_name in variables:
             try:
@@ -705,14 +730,36 @@ class FieldResolver:
             else PathParser(field_path).parse()
         )
 
+    @staticmethod
+    def __get_vars_from_path(
+        path: str | list[str | QueryParser] | PathParser,
+    ) -> set[str]:
+        if isinstance(path, str):
+            path = PathParser(path)
+        if isinstance(path, PathParser):
+            path = path.parse()
+        if not isinstance(path, list):
+            raise TypeError(f"Invalid path type supplied: {type(path)}")
+        ans = set()
+        for step in path:
+            if isinstance(step, QueryParser):
+                ans.update(step.variable_references)
+        return ans
+
     def __populate_variables(
         self,
         doc: dict[str, Any],
         fallback_values: dict[str, Any],
+        field_path: list[str | QueryParser] | str | PathParser,
         allow_fail: bool = False,
         prefer_fallback: bool = False,
     ) -> dict[str, Any]:
-        args = {"whole_doc": doc, "warning_on": not allow_fail}
+        variables_needed = self.__get_vars_from_path(field_path)
+        args = {
+            "whole_doc": doc,
+            "warning_on": not allow_fail,
+            "variables_needed": variables_needed,
+        }
         if prefer_fallback:
             args["already_resolved_variables"] = fallback_values
         variables = {} if not fallback_values else {**fallback_values}
@@ -746,12 +793,15 @@ class FieldResolver:
             ran_on.add(path)
             func(value)
 
+        parsed_path = self.ensure_field_path(field_path)
         resolved_variables = self.__cast_vars_to_sets(
-            self.__populate_variables(doc, fallback_variables, create_nonexistent)
+            self.__populate_variables(
+                doc, fallback_variables, parsed_path, create_nonexistent
+            )
         )
         self._run_on_path(
             doc,
-            self.ensure_field_path(field_path),
+            parsed_path,
             resolved_variables,
             "",
             adjusted_func,
@@ -781,14 +831,18 @@ class FieldResolver:
         This improves performance. Default is `False`.
         :return: a list of concrete occurrences (paths in the string format).
         """
-        try:
-            resolved_variables = self.__cast_vars_to_sets(
-                self.__populate_variables(doc, fallback_variables, prefer_fallback)
+        parsed_path = self.ensure_field_path(field_path)
+        resolved_variables = self.__cast_vars_to_sets(
+            self.__populate_variables(
+                doc, fallback_variables, parsed_path, prefer_fallback
             )
+        )
+        try:
+
             paths = set()
             self._run_on_path(
                 doc,
-                self.ensure_field_path(field_path),
+                parsed_path,
                 resolved_variables,
                 "",
                 lambda _, path: paths.add(path),
@@ -845,10 +899,12 @@ class FieldResolver:
         on these paths according to
 
         """
+        parsed_path = self.ensure_field_path(field_path)
         resolved_variables = self.__cast_vars_to_sets(
             self.__populate_variables(
                 doc,
                 fallback_variables,
+                parsed_path,
                 allow_fail=True,
                 prefer_fallback=True,
             )
@@ -860,7 +916,7 @@ class FieldResolver:
 
         self._run_on_path(
             doc,
-            self.ensure_field_path(field_path),
+            parsed_path,
             resolved_variables,
             "",
             extend_ans,
@@ -876,7 +932,10 @@ class FieldResolver:
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
     ) -> list[Any]:
-        """Fetches the parent of the last expression. Useful for document mutations."""
+        """
+        Fetches the parent of the last expression. Useful for document mutations.
+        Does not resolve variables on its own.
+        """
         path = self.ensure_field_path(field_path)
         if create_nonexistent:
             # create parents
