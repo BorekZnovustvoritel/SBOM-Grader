@@ -1,6 +1,6 @@
 [project]
 name = "sbomgrader"
-version = "0.2.0"
+version = "0.2.1"
 description = "SBOM Grader"
 authors = [
     {name = "mszymutk", email = "mszymutk@redhat.com"},
