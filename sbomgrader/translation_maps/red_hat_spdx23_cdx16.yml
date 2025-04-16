@@ -83,8 +83,6 @@ chunks:
         fieldPath: metadata.timestamp
       - name: tools
         fieldPath: metadata.?.tools.?.components[|]
-      - name: tools_backup
-        fieldPath: metadata.?.tools[|]
       - name: supplier
         fieldPath: metadata.supplier.name
       - name: component_supplier
@@ -110,7 +108,7 @@ chunks:
 
         creators:
 
-          {% for tool in tools | fallback(tools_backup) %}
+          {% for tool in tools %}
 
           {% set tool_str = tool.name ~ ' ' ~ tool.version %}
 

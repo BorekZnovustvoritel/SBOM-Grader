@@ -371,6 +371,15 @@ class FieldResolver:
             ans.add(var_name)
         return ans
 
+    @staticmethod
+    def __mark_variable_as_resolved(
+        dependency_dict: dict[str, set[str]], var_name: str
+    ):
+        dependency_dict.pop(var_name, None)
+        for deps in dependency_dict.values():
+            if var_name in deps:
+                deps.remove(var_name)
+
     def resolve_variables(
         self,
         whole_doc: dict[str, Any],
@@ -409,15 +418,21 @@ class FieldResolver:
                     variables_needed, already_resolved_variables
                 )
             }
-        dependencies: dict[str, set[str]] = {
-            var_name: {
-                dep
-                for dep in variable_def.dependencies
-                if dep not in already_resolved_variables
-            }
+        # This will keep track of variable values that need to be
+        # included for other variable resolution
+        all_dependencies: dict[str, set[str]] = {
+            var_name: variable_def.dependencies
             for var_name, variable_def in vars_to_resolve.items()
         }
+        # This variable will be reduced so only the outstanding
+        # (blocking, unresolved) dependencies are included
+        dependencies: dict[str, set[str]] = {
+            var_name: set(deps) for var_name, deps in all_dependencies.items()
+        }
+        # This variable keeps track of what is already resolved
         resolved_variables: dict[str, list] = {**already_resolved_variables}
+        for var_name in resolved_variables:
+            self.__mark_variable_as_resolved(dependencies, var_name)
         while not all(var_name in resolved_variables for var_name in dependencies):
             # Get a var with no dependencies
             var_name, var_deps = sorted(dependencies.items(), key=lambda x: len(x[1]))[
@@ -427,7 +442,7 @@ class FieldResolver:
                 self._uninitialized_vars[dep_name].is_relative for dep_name in var_deps
             ):
                 # Cannot resolve absolute variable referencing a relative one
-                dependencies.pop(var_name)
+                self.__mark_variable_as_resolved(dependencies, var_name)
                 continue
             assert not var_deps, (
                 f"Circular variable reference found for variable {var_name}. "
@@ -441,11 +456,18 @@ class FieldResolver:
                 resolved_variables[var_name].append(value)
 
             path = vars_to_resolve[var_name].path_parser.parse(path_to_instance)
+            variables_needed = self.__cast_vars_to_sets(
+                {
+                    dep_name: dep_value
+                    for dep_name, dep_value in resolved_variables.items()
+                    if dep_name in all_dependencies.get(var_name, set())
+                }
+            )
             try:
                 self._run_on_path(
                     whole_doc,
                     path,
-                    resolved_variables,
+                    variables_needed,
                     "",
                     add_to_variable,
                     False,
@@ -457,10 +479,7 @@ class FieldResolver:
                         file=sys.stderr,
                     )
 
-            dependencies.pop(var_name)
-            for dep in dependencies.values():
-                if var_name in dep:
-                    dep.remove(var_name)
+            self.__mark_variable_as_resolved(dependencies, var_name)
         return resolved_variables
 
     @staticmethod
@@ -479,11 +498,24 @@ class FieldResolver:
             # Add a list
             mutable_doc[step] = []
 
+    @staticmethod
+    def __cast_vars_to_sets(
+        variables: dict[str, list[Any]],
+    ) -> dict[str, list[Any] | set[Any]]:
+        new_variables = {}
+        for var_name in variables:
+            try:
+                new_value = set(variables[var_name])
+                new_variables[var_name] = new_value
+            except TypeError:
+                new_variables[var_name] = variables[var_name]
+        return new_variables
+
     def _run_on_path(
         self,
         doc_: Union[dict, list[Any], FIELD_NOT_PRESENT],
         path: list[str | QueryParser | PathParser],
-        variable_values: dict[str, Any],
+        variable_values: dict[str, list[Any] | set[Any]],
         path_tried: str,
         func_to_run: Callable[[Any, str], Any],
         accept_not_present_field: bool,
@@ -714,10 +746,13 @@ class FieldResolver:
             ran_on.add(path)
             func(value)
 
+        resolved_variables = self.__cast_vars_to_sets(
+            self.__populate_variables(doc, fallback_variables, create_nonexistent)
+        )
         self._run_on_path(
             doc,
             self.ensure_field_path(field_path),
-            self.__populate_variables(doc, fallback_variables, create_nonexistent),
+            resolved_variables,
             "",
             adjusted_func,
             create_nonexistent,
@@ -747,11 +782,14 @@ class FieldResolver:
         :return: a list of concrete occurrences (paths in the string format).
         """
         try:
+            resolved_variables = self.__cast_vars_to_sets(
+                self.__populate_variables(doc, fallback_variables, prefer_fallback)
+            )
             paths = set()
             self._run_on_path(
                 doc,
                 self.ensure_field_path(field_path),
-                self.__populate_variables(doc, fallback_variables, prefer_fallback),
+                resolved_variables,
                 "",
                 lambda _, path: paths.add(path),
                 False,
@@ -807,11 +845,13 @@ class FieldResolver:
         on these paths according to
 
         """
-        resolved_variables = self.__populate_variables(
-            doc,
-            fallback_variables,
-            allow_fail=True,
-            prefer_fallback=True,
+        resolved_variables = self.__cast_vars_to_sets(
+            self.__populate_variables(
+                doc,
+                fallback_variables,
+                allow_fail=True,
+                prefer_fallback=True,
+            )
         )
         ans = {}
 

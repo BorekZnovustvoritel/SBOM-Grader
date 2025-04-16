@@ -1,4 +1,3 @@
-from functools import cached_property
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,7 +14,6 @@ from sbomgrader.core.field_resolve import (
     Variable,
     FieldResolver,
     QueryParser,
-    PathParser,
 )
 from sbomgrader.core.formats import (
     SBOMFormat,
@@ -152,7 +150,7 @@ class Chunk:
     def occurrences(
         self, doc: Document, fallback_variables: dict[str, Any] = None
     ) -> dict[str, Any]:
-        """Returns a list of string fieldPaths where the element occurs."""
+        """Returns a list of objects and string fieldPaths where the element occurs."""
         fallback_variables = fallback_variables or {}
         resolver = self.resolver_for(doc.sbom_format)
         return resolver.get_paths_and_objects(
