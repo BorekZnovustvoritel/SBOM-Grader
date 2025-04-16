@@ -407,6 +407,7 @@ class FieldResolver:
         already_resolved_variables: dict[str, list[Any]] = None,
         warning_on: bool = True,
         variables_needed: list[str] | set[str] = None,
+        path_prefix: str = "",
     ) -> dict[str, list[Any]]:
         """
         Resolve dependencies.
@@ -418,6 +419,7 @@ class FieldResolver:
         performance.
         :argument warning_on: Should this function display a warning to the STDERR?
         :argument variables_needed: Specify a subset of variables that need resolving.
+        :argument path_prefix: Optionally provide a path that will be prepended to each "path tried".
         """
         already_resolved_variables = already_resolved_variables or {}
         if not variables_needed:
@@ -488,7 +490,7 @@ class FieldResolver:
                     whole_doc,
                     path,
                     variables_needed,
-                    "",
+                    path_prefix,
                     add_to_variable,
                     False,
                 )
@@ -774,6 +776,7 @@ class FieldResolver:
         minimal_runs: int = 1,
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
+        path_prefix: str = "",
     ) -> None:
         """
         Execute a function on each field matching the FieldPath expression.
@@ -786,6 +789,7 @@ class FieldResolver:
         the format {"var_name": [var_value1, var_value2,...]}
         :argument create_nonexistent: If the path does not exist yet, should
         this function create it? Useful for document creation.
+        :argument path_prefix: Optionally provide a path that will be prepended to each "path tried".
         """
         ran_on = set()
 
@@ -803,7 +807,7 @@ class FieldResolver:
             doc,
             parsed_path,
             resolved_variables,
-            "",
+            path_prefix,
             adjusted_func,
             create_nonexistent,
             create_nonexistent,
@@ -818,6 +822,7 @@ class FieldResolver:
         field_path: str | list[Union[str, QueryParser]],
         fallback_variables: dict[str, Any],
         prefer_fallback: bool = False,
+        path_prefix: str = "",
     ) -> list[str]:
         """
         Get paths to occurrences of fields matching the general expressions.
@@ -829,6 +834,7 @@ class FieldResolver:
         the format {"var_name": [var_value1, var_value2,...]}
         :argument prefer_fallback: If set to `True`, fallback variables will not be overridden.
         This improves performance. Default is `False`.
+        :argument path_prefix: Optionally provide a path that will be prepended to each "path tried".
         :return: a list of concrete occurrences (paths in the string format).
         """
         parsed_path = self.ensure_field_path(field_path)
@@ -844,7 +850,7 @@ class FieldResolver:
                 doc,
                 parsed_path,
                 resolved_variables,
-                "",
+                path_prefix,
                 lambda _, path: paths.add(path),
                 False,
                 False,
@@ -859,6 +865,7 @@ class FieldResolver:
         field_path: str | list[Union[str, QueryParser]],
         fallback_variables: dict[str, Any] | None = None,
         create_nonexistent: bool = False,
+        path_prefix: str = "",
     ) -> list[Any]:
         """
         Gets all fields matching the FieldPath expression.
@@ -868,6 +875,7 @@ class FieldResolver:
         the format {"var_name": [var_value1, var_value2,...]}.
         :argument create_nonexistent: If the fields do not exist already,
         should they be created? Useful for document creation.
+        :argument path_prefix: Optionally provide a path that will be prepended to each "path tried".
         :return: A list of field values.
         """
         ans = []
@@ -883,6 +891,7 @@ class FieldResolver:
                 minimal_runs=0,
                 fallback_variables=fallback_variables,
                 create_nonexistent=create_nonexistent,
+                path_prefix=path_prefix,
             )
             return ans
         except FieldNotPresentError:
@@ -893,6 +902,7 @@ class FieldResolver:
         doc: dict[str, Any],
         field_path: str | list[Union[str, QueryParser]],
         fallback_variables: dict[str, list[Any]],
+        path_prefix: str = "",
     ) -> dict[str, Any]:
         """
         Retrieves a dictionary of absolute paths and values
@@ -918,7 +928,7 @@ class FieldResolver:
             doc,
             parsed_path,
             resolved_variables,
-            "",
+            path_prefix,
             extend_ans,
             False,
             False,

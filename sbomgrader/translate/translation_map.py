@@ -66,7 +66,9 @@ class Data:
         )
         already_resolved_vars.update(
             relative_resolver.resolve_variables(
-                instance_value, already_resolved_variables=already_resolved_vars
+                instance_value,
+                already_resolved_variables=already_resolved_vars,
+                path_prefix=path_to_instance,
             )
         )
         resolved_variables = self.field_resolver.resolve_variables(
