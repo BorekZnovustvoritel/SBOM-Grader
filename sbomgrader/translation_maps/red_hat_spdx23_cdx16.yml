@@ -543,7 +543,7 @@ chunks:
 
         - license:
 
-            id: {{ license }}
+            name: {{ license }}
             acknowledgement: declared
 
       {% endfor %}
@@ -552,7 +552,7 @@ chunks:
 
         - license:
 
-            id: {{ license }}
+            name: {{ license }}
             acknowledgement: concluded
 
       {% endfor %}

@@ -8,6 +8,7 @@ class ResultType(Enum):
     ERROR = "error"
     SKIPPED = "skipped"
     NOT_IMPLEMENTED = "not implemented"
+    NOT_APPLICABLE = "not applicable"
 
     @staticmethod
     def get_visual(res_type: "ResultType") -> str:

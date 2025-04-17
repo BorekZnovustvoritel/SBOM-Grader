@@ -36,7 +36,7 @@
             "licenses": [
                 {
                     "license": {
-                        "id": "OFL",
+                        "name": "OFL",
                         "acknowledgement": "concluded"
                     }
                 }
@@ -52,7 +52,7 @@
                     "value": "/var/lib/rpm/Packages"
                 }
             ],
-            "supplier": "Red Hat",
+            "supplier": {"name": "Red Hat"},
             "purl": "pkg:rpm/redhat/abattis-cantarell-fonts@0.0.25-6.el8?arch=noarch&upstream=abattis-cantarell-fonts-0.0.25-6.el8.src.rpm&distro=rhel-8.10&package-id=a91121201ed3be00",
             "type": "library",
             "version": "0.0.25-6.el8"
@@ -92,7 +92,7 @@
                     "value": "/usr/share/java/quarkus-mandrel-java/collections.jar"
                 }
             ],
-            "supplier": "Red Hat",
+            "supplier": {"name": "Red Hat"},
             "purl": "pkg:maven/org.graalvm.sdk/collections@23.1.5.0-1-redhat-00001?type=jar",
             "type": "library",
             "version": "23.1.5.0-1-redhat-00001"

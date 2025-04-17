@@ -32,6 +32,7 @@ class Result:
     errors: dict[str, str] = field(default_factory=dict)
     skipped: set[str] = field(default_factory=set)
     not_implemented: set[str] = field(default_factory=set)
+    not_applicable: set[str] = field(default_factory=set)
 
     def __add__(self, other: "Result") -> "Result":
         if not isinstance(other, Result):
@@ -42,6 +43,7 @@ class Result:
             errors=self.errors | other.errors,
             skipped=self.skipped | other.skipped,
             not_implemented=self.not_implemented | other.not_implemented,
+            not_applicable=self.not_applicable | other.not_applicable,
         )
 
     def get(self, rule_name: str) -> ResultDetail:
@@ -75,6 +77,12 @@ class Result:
                 result_type=ResultType.SUCCESS,
                 result_detail="Success.",
             )
+        if rule_name in self.not_applicable:
+            return ResultDetail(
+                rule_name=rule_name,
+                result_type=ResultType.NOT_APPLICABLE,
+                result_detail="This rule is not relevant for this SBOM format.",
+            )
         return ResultDetail(
             rule_name=rule_name,
             result_type=ResultType.NOT_PRESENT,
@@ -90,12 +98,15 @@ class Rule:
     field_path: str
     minimum_tested_elements: int
     field_resolver: FieldResolver
+    applicable: bool = True
 
     def __call__(
         self,
         doc: list[dict] | dict | Document,
         fallback_vars: dict[str, Any] | None = None,
     ) -> Result:
+        if not self.applicable:
+            return Result(not_applicable={self.name})
         if isinstance(doc, dict):
             doc = Document(doc)
 
@@ -159,35 +170,38 @@ class RuleSet:
             failure_message = rule["failureMessage"]
             for spec in implementations:
                 implementation_name = spec["name"]
+                applicable = spec.get("applicable", True)
+
                 field_path = spec.get("fieldPath")
-                checker = spec["checker"]
-                # TODO rework for more than one operation
-                operation = next(iter(checker.keys()))
+                checker = spec.get("checker")
+                if checker:
+                    operation = next(iter(checker.keys()))
 
-                check_against = checker[operation]
-                if check_against == FIELD_NOT_PRESENT.string_repr:
-                    check_against = FIELD_NOT_PRESENT
-                elif isinstance(check_against, list):
-                    contains_field_not_present = (
-                        FIELD_NOT_PRESENT.string_repr in check_against
-                    )
-                    check_against = [
-                        item
-                        for item in check_against
-                        if item != FIELD_NOT_PRESENT.string_repr
-                    ]
-                    if contains_field_not_present:
-                        check_against.append(FIELD_NOT_PRESENT)
-                func = operation_map[operation]
+                    check_against = checker[operation]
+                    if check_against == FIELD_NOT_PRESENT.string_repr:
+                        check_against = FIELD_NOT_PRESENT
+                    elif isinstance(check_against, list):
+                        contains_field_not_present = (
+                            FIELD_NOT_PRESENT.string_repr in check_against
+                        )
+                        check_against = [
+                            item
+                            for item in check_against
+                            if item != FIELD_NOT_PRESENT.string_repr
+                        ]
+                        if contains_field_not_present:
+                            check_against.append(FIELD_NOT_PRESENT)
+                    func = operation_map[operation]
 
-                if not callable(func):
-                    # load func according to name
-                    func = implementation_loaders[implementation_name].load_func(
-                        check_against
-                    )
+                    if not callable(func):
+                        # load func according to name
+                        func = implementation_loaders[implementation_name].load_func(
+                            check_against
+                        )
+                    else:
+                        func = partial(func, check_against)
                 else:
-                    func = partial(func, check_against)
-
+                    func = lambda _: None
                 var_dict = {}
                 spec_variables = spec.get("variables", [])
                 for var_obj in spec_variables:
@@ -205,6 +219,7 @@ class RuleSet:
                     field_path=field_path,
                     field_resolver=FieldResolver(var_dict),
                     minimum_tested_elements=minimum_tested_elements,
+                    applicable=applicable,
                 )
         all_rule_names = {rule["name"] for rule in schema_dict["rules"]}
         return RuleSet(

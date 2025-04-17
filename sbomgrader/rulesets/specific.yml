@@ -3,10 +3,6 @@ variables:
   implementations:
     - name: spdx23
       variables:
-        - name: root_element_spdxids
-          fieldPath: >-
-            relationships[relationshipType=DESCRIBES,
-            spdxElementId=SPDXRef-DOCUMENT]relatedSpdxElement
         - name: image_package_spdxids
           fieldPath: >-
             packages[?.externalRefs[referenceType=purl]
@@ -15,20 +11,28 @@ variables:
           fieldPath: >-
             packages[?.externalRefs[referenceType=purl]
             referenceLocator%=pkg:rpm/]SPDXID
-        - name: product_spdxids
-          fieldPath: packages[?.externalRefs[|]referenceCategory=SECURITY]SPDXID
         - name: source_rpm_archives_spdxids
           fieldPath: >-
             relationships[relationshipType=CONTAINS,
             spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
-        - name: source_image_spdxids
+        - name: image_index_spdxids
           fieldPath: >-
-            relationships[relationshipType=CONTAINS,
+            ?.relationships[relationshipType=VARIANT_OF,
             spdxElementId=${image_package_spdxids}]relatedSpdxElement
+        - name: image_source_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=GENERATED_FROM,
+            spdxElementId=${image_index_spdxids}]relatedSpdxElement
+        - name: image_source_origin_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=DEPENDS_ON,
+            spdxElementId=${image_source_spdxids}]relatedSpdxElement
         - name: all_packages_spdxids
           fieldPath: >-
-            packages[SPDXID!=${source_image_spdxids},
-            SPDXID!=${source_rpm_archives_spdxids}]SPDXID
+            packages[SPDXID!=${source_rpm_archives_spdxids},
+            SPDXID!=${image_source_spdxids},
+            SPDXID!=${image_source_origin_spdxids},
+            SPDXID!=${image_index_spdxids}]SPDXID
 rules:
   # IMAGE INDEX
   - name: All image packages are VARIANT_OF the image index
@@ -71,6 +75,11 @@ rules:
           externalRefs[referenceType=purl]referenceLocator
         checker:
           func_name: purl_has_repo_and_tag_qualifiers
+      - name: cdx16
+        minimumTestedElements: 0
+        fieldPath: 'components[?.purl%=pkg:oci/]purl'
+        checker:
+          func_name: purl_has_repo_and_tag_qualifiers
   # RPM
   - name: RPM packages have packageFileName
     failureMessage: >-
@@ -81,6 +90,8 @@ rules:
         fieldPath: packages[SPDXID=${rpm_package_spdxids}]packageFileName
         checker:
           neq: FIELD_NOT_FOUND
+      - name: cdx16
+        applicable: false
   - name: RPM packages have a repository_id qualifier in PURLs
     failureMessage: Add repository_id qualifier to all RPM purls.
     implementations:
@@ -91,6 +102,12 @@ rules:
           [referenceType=purl]referenceLocator
         checker:
           str_contains: repository_id=
+      - name: cdx16
+        minimumTestedElements: 0
+        fieldPath: >-
+          components[?.purl%=pkg:/rpm]purl
+        checker:
+          str_contains: repository_id=
   - name: RPM packages have an arch qualifier in PURLs
     failureMessage: Add arch qualifier to all RPM purls.
     implementations:
@@ -99,6 +116,12 @@ rules:
         fieldPath: >-
           packages[SPDXID=${rpm_package_spdxids}]
           externalRefs[referenceType=purl]referenceLocator
+        checker:
+          str_contains: arch=
+      - name: cdx16
+        minimumTestedElements: 0
+        fieldPath: >-
+          components[?.purl%=pkg:/rpm]purl
         checker:
           str_contains: arch=
   - name: RPM packages are annotated with sigmd5

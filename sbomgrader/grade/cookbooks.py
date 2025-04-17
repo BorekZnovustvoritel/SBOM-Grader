@@ -87,6 +87,8 @@ class CookbookResult:
                 ans += f"\n### {force.value}:\n\n"
                 for result_detail in rules_in_force:
                     detail = self.get(result_detail.rule_name)
+                    if detail.result_type is ResultType.NOT_APPLICABLE:
+                        continue
                     ans += f"- {result_detail.rule_name} {ResultType.get_visual(detail.result_type)}\n"
             unsuccessful = self.get_unsuccessful()
             if unsuccessful.cookbook.all_used_rule_names:

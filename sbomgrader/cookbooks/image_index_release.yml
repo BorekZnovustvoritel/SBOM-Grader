@@ -9,7 +9,6 @@ SHOULD:
   # general
   - Document passes extra validation
   - All packages have a versionInfo
-  - License list has correct form
   - All packages are referenced in relationships
   - All packages have a checksum
   - All packages have a supplier
@@ -18,6 +17,8 @@ SHOULD:
   - All image packages are VARIANT_OF the image index
   - All non-main image packages have an arch qualifier purl
   - All Image PURLs contain qualifier repository_url and tag
+MAY:
+  - License list has correct form
 rulesets:
   - general
   - specific
