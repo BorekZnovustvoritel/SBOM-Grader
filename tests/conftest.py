@@ -14,38 +14,43 @@ def testdata_dir() -> Path:
 
 
 @pytest.fixture()
-def image_index_build_sbom(testdata_dir) -> Document:
-    return Document(get_mapping(testdata_dir / "image_index_build_sbom.json"))
+def grading_dir(testdata_dir: Path) -> Path:
+    return testdata_dir / "test_grading"
 
 
 @pytest.fixture()
-def image_index_release_sbom(testdata_dir) -> Document:
-    return Document(get_mapping(testdata_dir / "image_index_release_sbom.json"))
+def image_index_build_sbom(grading_dir) -> Document:
+    return Document(get_mapping(grading_dir / "image_index_build_sbom.spdx.json"))
 
 
 @pytest.fixture()
-def image_build_sbom(testdata_dir) -> Document:
-    return Document(get_mapping(testdata_dir / "image_build_sbom.json"))
+def image_index_release_sbom(grading_dir) -> Document:
+    return Document(get_mapping(grading_dir / "image_index_release_sbom.spdx.json"))
 
 
 @pytest.fixture()
-def image_release_sbom(testdata_dir) -> Document:
-    return Document(get_mapping(testdata_dir / "image_release_sbom.json"))
+def image_build_sbom(grading_dir) -> Document:
+    return Document(get_mapping(grading_dir / "image_build_sbom.spdx.json"))
 
 
 @pytest.fixture()
-def product_sbom(testdata_dir) -> Document:
-    return Document(get_mapping(testdata_dir / "product_sbom.json"))
+def image_release_sbom(grading_dir) -> Document:
+    return Document(get_mapping(grading_dir / "image_release_sbom.spdx.json"))
 
 
 @pytest.fixture()
-def rpm_build_sbom(testdata_dir) -> Document:
-    return Document(get_mapping(testdata_dir / "rpm_build_sbom.json"))
+def product_sbom(grading_dir) -> Document:
+    return Document(get_mapping(grading_dir / "product_sbom.spdx.json"))
 
 
 @pytest.fixture()
-def rpm_release_sbom(testdata_dir) -> Document:
-    return Document(get_mapping(testdata_dir / "rpm_release_sbom.json"))
+def rpm_build_sbom(grading_dir) -> Document:
+    return Document(get_mapping(grading_dir / "rpm_build_sbom.spdx.json"))
+
+
+@pytest.fixture()
+def rpm_release_sbom(grading_dir) -> Document:
+    return Document(get_mapping(grading_dir / "rpm_release_sbom.spdx.json"))
 
 
 @pytest.fixture()

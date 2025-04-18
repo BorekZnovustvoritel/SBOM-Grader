@@ -52,12 +52,19 @@ properties:
           type: array
           items:
             type: object
-            required:
-              - name
-              - checker
+            anyOf:
+              - required:
+                  - name
+                  - checker
+              - required:
+                  - name
+                  - applicable
             properties:
               name:
                 type: string
+              applicable:
+                type: boolean
+                default: true
               failureMessage:
                 type: string
               variables:

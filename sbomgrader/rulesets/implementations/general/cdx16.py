@@ -7,7 +7,7 @@ from sbomgrader.core.definitions import FIELD_NOT_PRESENT
 
 
 def validate_schema(doc: dict):
-    validator = JsonValidator(SchemaVersion.V1_5)
+    validator = JsonValidator(SchemaVersion.V1_6)
     error = validator.validate_str(json.dumps(doc))
     if error:
         raise AssertionError(error.data)
@@ -17,6 +17,7 @@ def package_relationships(doc: dict):
     all_bom_refs_from_deps = set()
     for dep in doc.get("dependencies", []):
         all_bom_refs_from_deps.update(dep.get("dependsOn", []))
+        all_bom_refs_from_deps.update(dep.get("provides", []))
         all_bom_refs_from_deps.add(dep["ref"])
     for idx, component in enumerate(doc.get("components", [])):
         assert (

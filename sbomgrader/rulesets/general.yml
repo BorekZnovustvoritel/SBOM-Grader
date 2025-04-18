@@ -13,17 +13,38 @@ variables:
             referenceLocator%=pkg:rpm/]SPDXID
         - name: source_rpm_archives_spdxids
           fieldPath: >-
-            relationships[relationshipType=CONTAINS,
+            relationships[relationshipType=GENERATED_FROM,
             spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
-        - name: source_image_spdxids
+        - name: rpm_midstream_packages_spdxids
           fieldPath: >-
-            relationships[relationshipType=CONTAINS,
+            ?.relationships[relationshipType=CONTAINS,
+            spdxElementId=${source_rpm_archives_spdxids}]relatedSpdxElement
+        - name: rpm_upstream_packages_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=GENERATED_FROM,
+            spdxElementId=${rpm_midstream_packages_spdxids}]
+            relatedSpdxElement
+        - name: image_index_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=VARIANT_OF,
             spdxElementId=${image_package_spdxids}]relatedSpdxElement
+        - name: image_source_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=GENERATED_FROM,
+            spdxElementId=${image_index_spdxids}]relatedSpdxElement
+        - name: image_source_origin_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=DEPENDS_ON,
+            spdxElementId=${image_source_spdxids}]relatedSpdxElement
         - name: all_packages_spdxids
           fieldPath: >-
-            packages[SPDXID!=${source_image_spdxids},
-            SPDXID!=${source_rpm_archives_spdxids}]SPDXID
-    - name: cdx15
+            packages[SPDXID!=${source_rpm_archives_spdxids},
+            SPDXID!=${image_source_spdxids},
+            SPDXID!=${image_source_origin_spdxids},
+            SPDXID!=${image_index_spdxids},
+            SPDXID!=${rpm_midstream_packages_spdxids},
+            SPDXID!=${rpm_upstream_packages_spdxids}]SPDXID
+    - name: cdx16
       variables:
         - name: all_libraries_bom_refs
           fieldPath: components[type=library]?.bom-ref
@@ -34,7 +55,7 @@ rules:
       - name: spdx23
         checker:
           func_name: validate_schema
-      - name: cdx15
+      - name: cdx16
         checker:
           func_name: validate_schema
   - name: Document passes extra validation
@@ -43,6 +64,8 @@ rules:
       - name: spdx23
         checker:
           func_name: full_validation
+      - name: cdx16
+        applicable: false
   - name: All packages have a versionInfo
     failureMessage: Add versionInfo to all packages.
     implementations:
@@ -50,7 +73,7 @@ rules:
         fieldPath: packages[SPDXID=${all_packages_spdxids}]versionInfo
         checker:
           neq: FIELD_NOT_PRESENT
-      - name: cdx15
+      - name: cdx16
         fieldPath: metadata.component.version
         checker:
           neq: FIELD_NOT_PRESENT
@@ -61,27 +84,28 @@ rules:
         fieldPath: creationInfo.licenseListVersion
         checker:
           str_matches_regex: '[0-9]+\.[0-9]+'
-          # Not implementable in cdx15
+      - name: cdx16
+        applicable: false
   - name: All packages are referenced in relationships
     failureMessage: Reference all packages in relationships or remove them.
     implementations:
       - name: spdx23
         checker:
           func_name: package_relationships
-      - name: cdx15
+      - name: cdx16
         checker:
           func_name: package_relationships
   - name: All packages have a checksum
     failureMessage: Add checksums to all packages.
     implementations:
       - name: spdx23
-        # Filter just packages and not products
+        # Filter just packages
         fieldPath: packages[SPDXID=${all_packages_spdxids}]checksums[&]
         checker:
           not_in:
             - FIELD_NOT_PRESENT
             - {}
-      - name: cdx15
+      - name: cdx16
         fieldPath: components[bom-ref=${all_libraries_bom_refs}]hashes
         checker:
           not_in:
@@ -96,7 +120,7 @@ rules:
           not_in:
             - FIELD_NOT_PRESENT
             - ""
-      - name: cdx15
+      - name: cdx16
         fieldPath: components[&]supplier
         checker:
           not_in:
@@ -109,7 +133,7 @@ rules:
         fieldPath: packages[SPDXID=${all_packages_spdxids}]externalRefs
         checker:
           length_gt: 0
-      - name: cdx15
+      - name: cdx16
         variables:
           - name: components_with_purl_bom_refs
             fieldPath: components[purl!=FIELD_NOT_PRESENT]bom-ref
@@ -128,7 +152,7 @@ rules:
         fieldPath: packages
         checker:
           length_gt: 1
-      - name: cdx15
+      - name: cdx16
         fieldPath: components
         checker:
           length_gt: 1
@@ -145,4 +169,7 @@ rules:
         fieldPath: packages[SPDXID=${main_spdxids}]
         checker:
           neq: FIELD_NOT_PRESENT
-          # Not applicable in cdx15, every component is a component
+      - name: cdx16
+        fieldPath: metadata.component
+        checker:
+          neq: FIELD_NOT_PRESENT

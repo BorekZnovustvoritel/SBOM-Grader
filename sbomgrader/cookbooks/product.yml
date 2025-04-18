@@ -9,7 +9,6 @@ SHOULD:
   # general
   - Document passes extra validation
   - All packages have a versionInfo
-  - License list has correct form
   - All packages are referenced in relationships
   - All packages have a supplier
   # specific
@@ -17,6 +16,8 @@ SHOULD:
   - RPM packages have a repository_id qualifier in PURLs
   - RPM packages have an arch qualifier in PURLs
   - All Image PURLs contain qualifier repository_url and tag
+MAY:
+  - License list has correct form
 rulesets:
   - general
   - specific

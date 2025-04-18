@@ -8,7 +8,6 @@ SHOULD:
   # general
   - Document passes extra validation
   - All packages have a versionInfo
-  - License list has correct form
   - All packages are referenced in relationships
   - All packages have a checksum
   - All packages have a supplier
@@ -16,6 +15,8 @@ SHOULD:
   # specific
   - Number of packages is greater than 1
   - RPM packages have packageFileName
+MAY:
+  - License list has correct form
 rulesets:
   - general
   - specific

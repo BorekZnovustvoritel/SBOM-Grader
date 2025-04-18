@@ -31,11 +31,37 @@ class Document:
     def sbom_format_fallback(self) -> set[SBOMFormat]:
         return get_fallbacks(self.sbom_format)
 
+    @staticmethod
+    def __determine_type_from_purls(purls: list[str]) -> SBOMType:
+        if any(purl.startswith("pkg:rpm/") for purl in purls):
+            return SBOMType.RPM
+        neutral_arches = {"noarch", "src"}
+        for purl in purls:
+            if purl.startswith("pkg:oci/"):
+                if "arch=" in purl:
+                    if any(f"arch={arch}" in purl for arch in neutral_arches):
+                        return SBOMType.IMAGE_INDEX
+                    else:
+                        return SBOMType.IMAGE
+                return SBOMType.IMAGE_INDEX
+
+        return SBOMType.UNKNOWN
+
+    @staticmethod
+    def __determine_type_from_cpes_and_purls(
+        cpes: list[str], purls: list[str]
+    ) -> SBOMType:
+        if cpes:
+            return SBOMType.PRODUCT
+        return Document.__determine_type_from_purls(purls)
+
     @property
     def sbom_type(self) -> "SBOMType":
+        ### SPDX 2.3
         if self.sbom_format is SBOMFormat.SPDX23 or self.sbom_format in get_fallbacks(
             SBOMFormat.SPDX23
         ):
+            # First get main component
             relationships = self._doc.get("relationships", [])
             main_relationships = [
                 relationship
@@ -44,55 +70,50 @@ class Document:
                 and relationship["relationshipType"] == "DESCRIBES"
             ]
             if len(main_relationships) > 1:
-                raise ValueError(
-                    "Cannot determine single SBOMType from multi-sbom. Try separating docs first."
-                )
+                # Many main components. Don't know what to do here
+                return SBOMType.UNKNOWN
             main_relationship = main_relationships[0]
             main_spdxid = main_relationship["relatedSpdxElement"]
-            first_degree_relationships = [
-                relationship
-                for relationship in relationships
-                if (
-                    relationship["spdxElementId"] == main_spdxid
-                    or relationship["relatedSpdxElement"] == main_spdxid
+            packages = self._doc.get("packages", [])
+            main_package = next(
+                filter(lambda x: x.get("SPDXID") == main_spdxid, packages), {}
+            )
+            main_pkg_references = main_package.get("externalRefs", [])
+            cpes = list(
+                filter(
+                    lambda x: x.get("referenceCategory") == "SECURITY",
+                    main_pkg_references,
                 )
-                and relationship != main_relationship
+            )
+            purls = [
+                ref.get("referenceLocator")
+                for ref in main_pkg_references
+                if ref.get("referenceType") == "purl"
             ]
-            if all(
-                relationship["relationshipType"] == "VARIANT_OF"
-                for relationship in first_degree_relationships
-            ):
-                return SBOMType.IMAGE_INDEX
-            if all(
-                relationship["relationshipType"]
-                in {"DESCENDANT_OF", "CONTAINS", "BUILD_TOOL_OF"}
-                for relationship in first_degree_relationships
-            ):
-                return SBOMType.IMAGE
-            if all(
-                relationship["relationshipType"] in {"GENERATED_FROM", "CONTAINS"}
-                for relationship in first_degree_relationships
-            ):
-                return SBOMType.RPM
-
-            def sort_relationship_key(relationship: dict):
-                return "".join(sorted(relationship.values()))
-
-            if sorted(
-                first_degree_relationships + main_relationships,
-                key=sort_relationship_key,
-            ) == sorted(relationships, key=sort_relationship_key):
-                return SBOMType.PRODUCT
-            return SBOMType.UNKNOWN
+            return self.__determine_type_from_cpes_and_purls(cpes, purls)
+        ### CDX 1.6
         elif (
             self.sbom_format is SBOMFormat.CYCLONEDX16
             or self.sbom_format in get_fallbacks(SBOMFormat.CYCLONEDX16)
         ):
-            if self._doc.get("metadata", {}).get("component", {}).get("type") in {
-                "operating-system"
-            }:
-                return SBOMType.PRODUCT
-            return SBOMType.UNKNOWN
+            main_component = self._doc.get("metadata", {}).get("component", {})
+            cpes = main_component.get("cpe", [])
+            cpes.extend(
+                [
+                    ref.get("concludedValue")
+                    for ref in main_component.get("evidence", {}).get("identity", [])
+                    if ref.get("field") == "cpe"
+                ]
+            )
+            purls = main_component.get("purl", [])
+            purls.extend(
+                [
+                    ref.get("concludedValue")
+                    for ref in main_component.get("evidence", {}).get("identity", [])
+                    if ref.get("field") == "purl"
+                ]
+            )
+            return self.__determine_type_from_cpes_and_purls(cpes, purls)
         else:
             raise NotImplementedError()
 

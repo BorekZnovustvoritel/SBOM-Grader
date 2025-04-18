@@ -199,6 +199,13 @@ chunks:
               type: application
 
           {% endfor %}
+
+            - name: '{{ SBOMGRADER_NAME }}'
+
+              version: '{{ SBOMGRADER_VERSION }}'
+
+              type: application
+
     secondFieldPath: .
 
 
@@ -543,7 +550,7 @@ chunks:
 
         - license:
 
-            id: {{ license }}
+            name: {{ license }}
             acknowledgement: declared
 
       {% endfor %}
@@ -552,7 +559,7 @@ chunks:
 
         - license:
 
-            id: {{ license }}
+            name: {{ license }}
             acknowledgement: concluded
 
       {% endfor %}

@@ -85,7 +85,7 @@
       "licenses": [
         {
           "license": {
-            "id": "Apache-2.0",
+            "name": "Apache-2.0",
             "acknowledgement": "concluded"
           }
         }
