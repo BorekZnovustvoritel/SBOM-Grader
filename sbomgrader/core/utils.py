@@ -139,6 +139,8 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
     env.globals["DATETIME_NOW"] = datetime.datetime.now(datetime.UTC).strftime(
         TIME_ISO_FORMAT_STRING
     )
+    env.globals["SBOMGRADER_NAME"] = "SBOMGrader"
+    env.globals["SBOMGRADER_VERSION"] = version
     env.globals["SBOMGRADER_SIGNATURE"] = f"SBOMGrader {version}"
 
     def unwrap(input_list: list[Any]) -> Any:
