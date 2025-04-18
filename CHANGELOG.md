@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.2.1...v0.2.2) (2025-04-18)
+
+
+### Bug Fixes
+
+* Update configs and test data. ([#23](https://github.com/BorekZnovustvoritel/SBOM-Grader/issues/23)) ([fa0e8f2](https://github.com/BorekZnovustvoritel/SBOM-Grader/commit/fa0e8f2f3b86c8db3388a54aec42c7424fb2544e))
+
 ## [0.2.1](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.2.0...v0.2.1) (2025-04-16)
 
 
