@@ -13,8 +13,17 @@ variables:
             referenceLocator%=pkg:rpm/]SPDXID
         - name: source_rpm_archives_spdxids
           fieldPath: >-
-            relationships[relationshipType=CONTAINS,
+            relationships[relationshipType=GENERATED_FROM,
             spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
+        - name: rpm_midstream_packages_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=CONTAINS,
+            spdxElementId=${source_rpm_archives_spdxids}]relatedSpdxElement
+        - name: rpm_upstream_packages_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=GENERATED_FROM,
+            spdxElementId=${rpm_midstream_packages_spdxids}]
+            relatedSpdxElement
         - name: image_index_spdxids
           fieldPath: >-
             ?.relationships[relationshipType=VARIANT_OF,
@@ -32,38 +41,21 @@ variables:
             packages[SPDXID!=${source_rpm_archives_spdxids},
             SPDXID!=${image_source_spdxids},
             SPDXID!=${image_source_origin_spdxids},
-            SPDXID!=${image_index_spdxids}]SPDXID
+            SPDXID!=${image_index_spdxids},
+            SPDXID!=${rpm_midstream_packages_spdxids},
+            SPDXID!=${rpm_upstream_packages_spdxids}]SPDXID
 rules:
   # IMAGE INDEX
-  - name: All image packages are VARIANT_OF the image index
-    failureMessage: All image packages have to be VARIANT_OF the image index.
-    implementations:
-      - name: spdx23
-        checker:
-          func_name: image_packages_variants
-  - name: All non-main image packages have an arch qualifier purl
+  - name: All image packages have an arch qualifier purl
     failureMessage: Add arch qualifier to at least one purl of each package.
     implementations:
       - name: spdx23
         fieldPath: >-
-          packages[SPDXID!=${root_element_spdxids},
+          packages[SPDXID=${all_packages_spdxids},
           SPDXID=${image_package_spdxids}]externalRefs
           [|,referenceType=purl]referenceLocator
         checker:
           str_contains: arch=
-  - name: >-
-      The SPDXID for non-main image packages be in the format
-      SPDXRef-type-name-digest
-    failureMessage: >-
-      Change SPDXID to SPDXRef-type-name-digest
-      for image packages.
-    implementations:
-      - name: spdx23
-        fieldPath: >-
-          packages[SPDXID!=${root_element_spdxids},
-          SPDXID=${image_package_spdxids}]SPDXID
-        checker:
-          str_matches_regex: 'SPDXRef-[a-z]+-[\w]+-[a-z0-9]+'
   # IMAGES
   - name: All Image PURLs contain qualifier repository_url and tag
     failureMessage: Add qualifiers repository_url and tag to every PURL.

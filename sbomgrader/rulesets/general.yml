@@ -13,8 +13,17 @@ variables:
             referenceLocator%=pkg:rpm/]SPDXID
         - name: source_rpm_archives_spdxids
           fieldPath: >-
-            relationships[relationshipType=CONTAINS,
+            relationships[relationshipType=GENERATED_FROM,
             spdxElementId=${rpm_package_spdxids}]relatedSpdxElement
+        - name: rpm_midstream_packages_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=CONTAINS,
+            spdxElementId=${source_rpm_archives_spdxids}]relatedSpdxElement
+        - name: rpm_upstream_packages_spdxids
+          fieldPath: >-
+            ?.relationships[relationshipType=GENERATED_FROM,
+            spdxElementId=${rpm_midstream_packages_spdxids}]
+            relatedSpdxElement
         - name: image_index_spdxids
           fieldPath: >-
             ?.relationships[relationshipType=VARIANT_OF,
@@ -32,7 +41,9 @@ variables:
             packages[SPDXID!=${source_rpm_archives_spdxids},
             SPDXID!=${image_source_spdxids},
             SPDXID!=${image_source_origin_spdxids},
-            SPDXID!=${image_index_spdxids}]SPDXID
+            SPDXID!=${image_index_spdxids},
+            SPDXID!=${rpm_midstream_packages_spdxids},
+            SPDXID!=${rpm_upstream_packages_spdxids}]SPDXID
     - name: cdx16
       variables:
         - name: all_libraries_bom_refs

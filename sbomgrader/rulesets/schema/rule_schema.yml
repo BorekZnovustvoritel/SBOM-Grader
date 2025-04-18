@@ -54,11 +54,11 @@ properties:
             type: object
             anyOf:
               - required:
-                - name
-                - checker
+                  - name
+                  - checker
               - required:
-                - name
-                - applicable
+                  - name
+                  - applicable
             properties:
               name:
                 type: string
