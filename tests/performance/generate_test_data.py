@@ -73,7 +73,8 @@ def generate_huge_spdx(num_of_packages: int) -> dict[str, Any]:
 
     for index in range(num_of_packages):
         skeleton["packages"].append(
-            yaml.safe_load(yaml.safe_dump(dep).format(num=index)))
+            yaml.safe_load(yaml.safe_dump(dep).format(num=index))
+        )
         skeleton["relationships"].append(
             yaml.safe_load(yaml.safe_dump(dep).format(num=index))
         )
