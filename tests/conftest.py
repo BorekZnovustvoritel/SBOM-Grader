@@ -6,6 +6,7 @@ from sbomgrader.core.definitions import COOKBOOKS_DIR
 from sbomgrader.core.utils import get_mapping
 from sbomgrader.grade.cookbooks import Cookbook
 from sbomgrader.grade.rules import Document
+from sbomgrader.translate.translation_map import TranslationMap
 
 
 @pytest.fixture()
@@ -91,3 +92,10 @@ def rpm_build_cookbook(cookbooks_dir) -> Cookbook:
 @pytest.fixture()
 def rpm_release_cookbook(cookbooks_dir) -> Cookbook:
     return Cookbook.from_file(cookbooks_dir / "rpm_release.yml")
+
+
+@pytest.fixture(scope="session")
+def built_in_translation_map() -> TranslationMap:
+    return TranslationMap.from_file(
+        "sbomgrader/translation_maps/red_hat_spdx23_cdx16.yml"
+    )
