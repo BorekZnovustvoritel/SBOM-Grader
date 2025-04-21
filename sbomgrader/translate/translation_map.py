@@ -357,3 +357,21 @@ class TranslationMap:
         if override_format is not None:
             new_data.update(SBOM_FORMAT_DEFINITION_MAPPING[override_format])
         return Document(new_data)
+
+    def is_exact_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if this map converts between these two formats."""
+        return ((from_ is self.first) and (to is self.second)) or (
+            (from_ is self.second) and (to is self.first)
+        )
+
+    def is_suitable_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+        """Determine if the map is able to convert between formats including fallbacks."""
+        if self.is_exact_map(from_, to):
+            return True
+        from_fallbacks = get_fallbacks(from_)
+        from_fallbacks.add(from_)
+        to_fallbacks = get_fallbacks(to)
+        to_fallbacks.add(to)
+        return (self.first in from_fallbacks and self.second in to_fallbacks) or (
+            self.first in to_fallbacks and self.second in from_fallbacks
+        )
