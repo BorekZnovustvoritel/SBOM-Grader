@@ -5,8 +5,8 @@ import yaml
 
 
 @pytest.fixture()
-def maximal_time_per_translation() -> int:
-    return 2
+def maximal_time_per_translation() -> float:
+    return 1.5
 
 
 @pytest.fixture()
