@@ -10,6 +10,11 @@ def maximal_time_per_translation() -> int:
 
 
 @pytest.fixture()
+def maximal_time_per_grade() -> float:
+    return 0.5
+
+
+@pytest.fixture()
 def repetitions() -> int:
     return 2
 
