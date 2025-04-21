@@ -9,13 +9,6 @@ from sbomgrader.translate.translation_map import TranslationMap
 from sbomgrader.core.utils import get_mapping
 
 
-@pytest.fixture(scope="session")
-def built_in_translation_map() -> TranslationMap:
-    yield TranslationMap.from_file(
-        "sbomgrader/translation_maps/red_hat_spdx23_cdx16.yml"
-    )
-
-
 def ordered(obj: Any):
     """Orders lists so translation is not order-dependent."""
     if isinstance(obj, dict):

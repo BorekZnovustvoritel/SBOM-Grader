@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import yaml
-from jinja2 import meta
+from jinja2 import meta, Template
 
 from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import (
@@ -43,6 +43,17 @@ class Data:
         self.transformer_path = transformer_path
         self.jinja_env = create_jinja_env(self.transformer_path)
         self._variables_needed_in_template = self._get_vars_for_template()
+        self.__template: Template | None = None
+
+    @property
+    def initialized_jinja_template(self) -> Template:
+        """
+        Cache the Jinja template initialization as this has been
+        uncovered as a bottleneck during profiling.
+        """
+        if self.__template is None:
+            self.__template = self.jinja_env.from_string(self.template)
+        return self.__template
 
     def render(
         self,
@@ -83,7 +94,7 @@ class Data:
                 val for val in var_val if val is not FIELD_NOT_PRESENT
             ]
         data_value = yaml.safe_load(
-            self.jinja_env.from_string(self.template).render(**resolved_variables)
+            self.initialized_jinja_template.render(**resolved_variables)
         )
         if prune_empty:
             data_value = prune(data_value)
