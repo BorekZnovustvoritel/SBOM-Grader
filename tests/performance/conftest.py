@@ -32,7 +32,7 @@ def huge_spdx(component_number_to_generate: int) -> dict[str, Any]:
         "SPDXID": "SPDXRef-DOCUMENT",
         "creationInfo": {
             "created": "1970-01-01T00:00:00Z",
-            "creators": ["Foobar"],
+            "creators": ["Tool: Foobar"],
             "licenseListVersion": "3.25",
         },
         "name": "foo",
@@ -42,7 +42,7 @@ def huge_spdx(component_number_to_generate: int) -> dict[str, Any]:
         "SPDXID": "SPDXRef-main",
         "name": "main_foo",
         "versionInfo": "0.0.1",
-        "supplier": "Crafted at home",
+        "supplier": "Organization: Crafted at home",
         "downloadLocation": "NOASSERTION",
         "licenseDeclared": "MIT",
         "externalRefs": [
@@ -68,7 +68,7 @@ def huge_spdx(component_number_to_generate: int) -> dict[str, Any]:
         "SPDXID": "SPDXRef-dep-{num}",
         "name": "dep_{num}",
         "versionInfo": "0.0.1",
-        "supplier": "Crafted at home",
+        "supplier": "Organization: Crafted at home",
         "downloadLocation": "NOASSERTION",
         "licenseDeclared": "MIT",
         "externalRefs": [

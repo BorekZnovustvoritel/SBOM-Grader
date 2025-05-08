@@ -1,5 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
+from enum import Enum
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable
@@ -93,7 +94,7 @@ class Result:
 @dataclass
 class Rule:
     name: str
-    func: Callable
+    func: Callable[[Any], Any]
     error_message: str
     field_path: str
     minimum_tested_elements: int
@@ -102,20 +103,22 @@ class Rule:
 
     def __call__(
         self,
-        doc: list[dict] | dict | Document,
+        doc: dict[str, Any] | Document,
         fallback_vars: dict[str, Any] | None = None,
     ) -> Result:
         if not self.applicable:
             return Result(not_applicable={self.name})
-        if isinstance(doc, dict):
-            doc = Document(doc)
+        if not isinstance(doc, Document):
+            sbom = Document(doc)
+        else:
+            sbom = doc
 
         result = Result(ran={self.name})
         field_path = self.field_path or ""
         fallback_vars = {} if not fallback_vars else fallback_vars
         try:
             self.field_resolver.run_func(
-                doc.doc,
+                sbom.doc,
                 self.func,
                 field_path,
                 self.minimum_tested_elements,
@@ -142,6 +145,7 @@ class RuleSet:
     @staticmethod
     def from_file(file: str | Path):
         schema_dict = get_mapping(file, RULESET_VALIDATION_SCHEMA_PATH)
+        assert schema_dict is not None, f"Could not load RuleSet from file: {file}."
 
         implementation_loaders: dict[str, RuleLoader] = {}
 
@@ -151,7 +155,7 @@ class RuleSet:
                 implementation_name, implementation_file
             )
 
-        global_variable_definitions = {}
+        global_variable_definitions: dict[str, dict[str, Variable]] = {}
         for implementation_obj in schema_dict.get("variables", {}).get(
             "implementations", []
         ):
@@ -163,7 +167,7 @@ class RuleSet:
                     var_obj["name"], var_obj["fieldPath"]
                 )
 
-        all_rules = defaultdict(dict)
+        all_rules: dict[str, dict[str, Callable[[Any], Any]]] = defaultdict(dict)
         for rule in schema_dict["rules"]:
             name = rule["name"]
             implementations = rule["implementations"]
@@ -195,13 +199,13 @@ class RuleSet:
 
                     if not callable(func):
                         # load func according to name
-                        func = implementation_loaders[implementation_name].load_func(
+                        testing_func: Callable[[Any], Any] = implementation_loaders[implementation_name].load_func(  # type: ignore[assignment]
                             check_against
                         )
                     else:
-                        func = partial(func, check_against)
+                        testing_func = partial(func, check_against)
                 else:
-                    func = lambda _: None
+                    testing_func = lambda _: None
                 var_dict = {}
                 spec_variables = spec.get("variables", [])
                 for var_obj in spec_variables:
@@ -214,7 +218,7 @@ class RuleSet:
 
                 all_rules[implementation_name][name] = Rule(
                     name=name,
-                    func=func,
+                    func=testing_func,
                     error_message=failure_message,
                     field_path=field_path,
                     field_resolver=FieldResolver(var_dict),
@@ -248,10 +252,10 @@ class RuleSet:
             self.field_resolvers[implementation] = FieldResolver(var_dict)
 
     @property
-    def formats(self) -> set[SBOMFormat]:
+    def formats(self) -> set[Enum]:
         return {SBOMFormat(k) for k in self.rules}
 
-    def format_for_doc(self, doc: Document) -> SBOMFormat | None:
+    def format_for_doc(self, doc: Document) -> Enum | None:
         if doc.sbom_format in self.formats:
             return doc.sbom_format
         fallbacks = doc.sbom_format_fallback
@@ -283,7 +287,7 @@ class RuleSet:
                 **self.rules.get(implementation, {}),
                 **other.rules.get(implementation, {}),
             }
-        variable_definitions = {}
+        variable_definitions: dict[str, dict[str, Variable]] = {}
         for implementation in [*self.field_resolvers.keys(), *other.rules.keys()]:
             variable_definitions[implementation] = {}
             self_resolver = self.field_resolvers.get(implementation)
@@ -308,8 +312,10 @@ class RuleSet:
         res = Result()
         if isinstance(document, dict):
             document = Document(document)
-        format_ = self.format_for_doc(document).value
-        global_variables_resolver = self.field_resolvers.get(format_)
+        sbom_format_enum = self.format_for_doc(document)
+        assert sbom_format_enum is not None, "Invalid format for document."
+        format_identifier = sbom_format_enum.value
+        global_variables_resolver = self.field_resolvers.get(format_identifier)
         global_variables = {}
         if global_variables_resolver:
             global_variables = global_variables_resolver.resolve_variables(document.doc)
@@ -318,8 +324,7 @@ class RuleSet:
             if rule not in self.selection:
                 res.skipped.add(rule)
                 continue
-            if rule_obj := self.rules.get(format_, {}).get(rule):
-                rule_obj: Rule | None
+            if rule_obj := self.rules.get(format_identifier, {}).get(rule):
                 if not callable(rule_obj):
                     res.not_implemented.add(rule)
                 else:

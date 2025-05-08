@@ -1,3 +1,5 @@
+from enum import Enum
+
 from sbomgrader.core.definitions import TRANSLATION_MAP_DIR
 from sbomgrader.core.documents import Document
 from sbomgrader.core.formats import SBOMFormat, get_fallbacks
@@ -6,7 +8,7 @@ from sbomgrader.translate.translation_map import TranslationMap
 
 
 def choose_map(
-    document: Document, out: SBOMFormat, *custom_maps: TranslationMap
+    document: Document, out: Enum, *custom_maps: TranslationMap
 ) -> TranslationMap:
     """Choose the translation map according to the document and output format."""
     for map_set in (custom_maps, get_default_maps()):
@@ -33,22 +35,22 @@ def get_default_maps() -> list[TranslationMap]:
 
 def get_all_map_list_tuples(
     *custom_maps: TranslationMap,
-) -> tuple[set[tuple[SBOMFormat, SBOMFormat]], set[tuple[SBOMFormat, SBOMFormat]]]:
+) -> tuple[set[tuple[Enum, Enum]], set[tuple[Enum, Enum]]]:
     """
     Returns 2 tuples, each contains a pair of SBOMFormat instances.
     These represent available translation directions.
     """
     direction_tuples = set()
-    all_maps = [*get_default_maps(), *custom_maps]
+    all_maps: list[TranslationMap] = [*get_default_maps(), *custom_maps]
     for map_ in all_maps:
         formats = tuple(sorted((map_.first, map_.second), key=lambda x: x.value))
         direction_tuples.add(formats)
     # Add fallbacks, include transitive relations
     fallback_tuples = {*direction_tuples}
-    starting_fallback_tuples = set()
+    starting_fallback_tuples: set[tuple[Enum, Enum]] = set()
     while starting_fallback_tuples != fallback_tuples:
         # Perform until no further changes occur
-        starting_fallback_tuples = {*fallback_tuples}
+        starting_fallback_tuples = {*fallback_tuples}  # type: ignore[arg-type]
         for tuple_ in starting_fallback_tuples:
             for format_ in SBOMFormat:
                 fallbacks = get_fallbacks(format_)
@@ -57,7 +59,7 @@ def get_all_map_list_tuples(
                 if tuple_[1] in fallbacks:
                     fallback_tuples.add((tuple_[0], format_))
     fallback_tuples = fallback_tuples - direction_tuples
-    return direction_tuples, fallback_tuples
+    return direction_tuples, fallback_tuples  # type: ignore[return-value]
 
 
 def get_all_map_list_markdown(*custom_maps: TranslationMap) -> str:

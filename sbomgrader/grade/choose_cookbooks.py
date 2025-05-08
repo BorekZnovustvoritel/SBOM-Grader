@@ -17,20 +17,22 @@ def select_cookbook_bundle(cookbooks: list[str]) -> CookbookBundle:
             # It's a default cookbook name
             cookbook_bundle += cookbook_obj
             continue
-        cookbook = Path(cookbook)
-        if cookbook.is_dir():
-            cookbook_bundle += CookbookBundle.from_directory(cookbook)
+        cookbook_path = Path(cookbook)
+        if cookbook_path.is_dir():
+            cookbook_bundle += CookbookBundle.from_directory(cookbook_path)
             if not cookbook_bundle.cookbooks:
                 print(
-                    f"Could not find any cookbooks in directory {cookbook.absolute()}",
+                    f"Could not find any cookbooks in directory {cookbook_path.absolute()}",
                     file=sys.stderr,
                 )
-        elif cookbook.is_file() and (
-            cookbook.name.endswith(".yml") or cookbook.name.endswith(".yaml")
+        elif cookbook_path.is_file() and (
+            cookbook_path.name.endswith(".yml") or cookbook_path.name.endswith(".yaml")
         ):
-            cookbook_bundles.append(CookbookBundle([Cookbook.from_file(cookbook)]))
+            cookbook_bundles.append(CookbookBundle([Cookbook.from_file(cookbook_path)]))
         else:
-            print(f"Could not find cookbook {cookbook.absolute()}", file=sys.stderr)
+            print(
+                f"Could not find cookbook {cookbook_path.absolute()}", file=sys.stderr
+            )
 
     for cb in cookbook_bundles:
         cookbook_bundle += cb

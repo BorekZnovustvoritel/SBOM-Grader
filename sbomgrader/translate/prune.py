@@ -51,18 +51,18 @@ def prune(struc: Any) -> Any:
             struc.pop(idx)
 
     elif isinstance(struc, dict):
-        to_prune = set()
+        to_prune_set = set()
         update_dict = {}
         for key, val in struc.items():
             if should_remove(val):
-                to_prune.add(key)
+                to_prune_set.add(key)
             if __is_prunable(val):
                 pruned = prune(val)
                 if should_remove(pruned):
-                    to_prune.add(key)
+                    to_prune_set.add(key)
                 else:
                     update_dict[key] = pruned
         struc.update(update_dict)
-        for item in to_prune:
+        for item in to_prune_set:
             struc.pop(item)
     return struc

@@ -1,9 +1,10 @@
 import sys
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
-import click
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -18,9 +19,41 @@ from sbomgrader.translate.choose_map import choose_map, get_all_map_list_markdow
 from sbomgrader.translate.translation_map import TranslationMap
 
 
+def _input_format(arg: str) -> dict[str, Any]:
+    """
+    Function to ensure input SBOM reading. Exits the process on error.
+    :param arg: The value that is passed to the argument parser.
+    :return: Loaded dictionary of the SBOM doc.
+    """
+    mapping = get_mapping(arg)
+    if not mapping:
+        print("Could not read SBOM from input or file!", file=sys.stderr)
+        exit(1)
+    return mapping
+
+
+def _safe_load_doc(mapping: dict[str, Any]) -> Document:
+    """
+    Load an SBOM document from dictionary to the `Document` object.
+    Ensures that the content is actually a supported SBOM type.
+    Exits the process otherwise.
+
+    :param mapping: The mapping containing the SBOM.
+    :return: The SBOM `Document` object.
+    """
+    try:
+        doc = Document(mapping)
+        # Test if this actually is an SBOM doc
+        assert doc.sbom_format
+        return doc
+    except NotImplementedError as e:
+        print("An error occurred: " + " ".join(e.args), file=sys.stderr)
+        exit(1)
+
+
 @dataclass
 class GradeConfig:
-    input_file: Path | str
+    input_file: dict[str, Any]
     cookbook_references: list[str]
     content_type: SBOMType
     sbom_type: SBOMTime
@@ -42,7 +75,7 @@ class GradeConfig:
 def create_grade_parser(parser: ArgumentParser):
     parser.add_argument(
         "input",
-        type=str,
+        type=_input_format,
         help="SBOM File to grade. Currently supports JSON.",
     )
     parser.add_argument(
@@ -88,7 +121,7 @@ def create_grade_parser(parser: ArgumentParser):
 def grade(config: GradeConfig) -> None:
     console = Console()
 
-    doc = Document(get_mapping(config.input_file))
+    doc = _safe_load_doc(config.input_file)
 
     if config.cookbook_references:
         cookbook_bundle = select_cookbook_bundle(config.cookbook_references)
@@ -119,8 +152,8 @@ def grade(config: GradeConfig) -> None:
 
 @dataclass
 class ConvertConfig:
-    input_file: Path
-    output_format: SBOMFormat
+    input_file: dict[str, Any]
+    output_format: Enum
     custom_maps: list[Path]
 
     @staticmethod
@@ -135,7 +168,7 @@ class ConvertConfig:
 def create_convert_parser(parser: ArgumentParser):
     parser.add_argument(
         "input",
-        type=str,
+        type=_input_format,
         help="SBOM File to convert. Currently supports JSON.",
     )
     parser.add_argument(
@@ -158,10 +191,9 @@ def convert(config: ConvertConfig) -> None:
 
     custom_maps = [TranslationMap.from_file(f) for f in config.custom_maps]
 
-    inp_file = config.input_file
-    doc = Document(get_mapping(inp_file))
+    doc = _safe_load_doc(config.input_file)
 
-    target_format = SBOMFormat(config.output_format)
+    target_format: Enum = SBOMFormat(config.output_format)
 
     t_map = choose_map(doc, target_format, *custom_maps)
     print(t_map.convert(doc, target_format).json_dump)

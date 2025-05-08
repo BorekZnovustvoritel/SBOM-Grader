@@ -1,5 +1,7 @@
 import datetime
 import json
+import sys
+from enum import Enum
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Literal
@@ -58,7 +60,7 @@ def get_mapping(
     if not doc:
         raise ValueError(f"Invalid mapping: '{schema}'.")
     if validation_schema:
-        validate(doc, get_mapping(validation_schema))
+        validate(doc, get_mapping(validation_schema))  # type: ignore[arg-type]
     return doc
 
 
@@ -94,7 +96,7 @@ def get_path_to_module(
     schema_path: str | Path,
     kind: Literal["Transformer", "Preprocessing", "Postprocessing"],
     first_or_second: Literal["first", "second"],
-    sbom_format: "sbomgrader.core.formats.SBOMFormat,",
+    sbom_format: Enum,
 ):
     """
     Get a path to a module related to the translation map located
@@ -151,7 +153,7 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
             return ""
 
     def sliced(
-        input_list: list[Any] | str, start: int = 0, end: int = None
+        input_list: list[Any] | str, start: int = 0, end: int | None = None
     ) -> list[Any] | str:
         """Return a slice of a list or a string."""
         if not isinstance(input_list, list) and not isinstance(input_list, str):
@@ -186,7 +188,14 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
 
         def func(item: Any, name: str, **kwargs) -> Any:
             python_loader = PythonLoader(transformer_file)
-            return python_loader.load_func(name)(item, **kwargs)
+            func_to_run = python_loader.load_func(name)
+            if func_to_run is None:
+                print(
+                    f"Could not run function {name}, it is not located in {transformer_file}!",
+                    file=sys.stderr,
+                )
+                return
+            return func_to_run(item, **kwargs)
 
         env.filters["func"] = func
     return env

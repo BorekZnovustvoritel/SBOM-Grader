@@ -1,4 +1,5 @@
 import json
+from enum import Enum
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,7 @@ class Document:
         self._doc = document_dict
 
     @cached_property
-    def sbom_format(self) -> SBOMFormat:
+    def sbom_format(self) -> Enum:
         for item in SBOMFormat:
             field_to_check = SBOM_FORMAT_DEFINITION_MAPPING[item]
 
@@ -28,7 +29,7 @@ class Document:
         raise NotImplementedError("Document is in an unsupported standard.")
 
     @property
-    def sbom_format_fallback(self) -> set[SBOMFormat]:
+    def sbom_format_fallback(self) -> set[Enum]:
         return get_fallbacks(self.sbom_format)
 
     @staticmethod
@@ -58,9 +59,11 @@ class Document:
     @property
     def sbom_type(self) -> "SBOMType":
         ### SPDX 2.3
-        if self.sbom_format is SBOMFormat.SPDX23 or self.sbom_format in get_fallbacks(
-            SBOMFormat.SPDX23
-        ):
+        if (
+            self.sbom_format is SBOMFormat.SPDX23  # type: ignore[attr-defined]
+            or self.sbom_format
+            in get_fallbacks(SBOMFormat.SPDX23)  # type: ignore[attr-defined]
+        ):  # type: ignore[attr-defined]
             # First get main component
             relationships = self._doc.get("relationships", [])
             main_relationships = [
@@ -75,7 +78,7 @@ class Document:
             main_relationship = main_relationships[0]
             main_spdxid = main_relationship["relatedSpdxElement"]
             packages = self._doc.get("packages", [])
-            main_package = next(
+            main_package: dict[str, Any] = next(
                 filter(lambda x: x.get("SPDXID") == main_spdxid, packages), {}
             )
             main_pkg_references = main_package.get("externalRefs", [])
@@ -93,8 +96,8 @@ class Document:
             return self.__determine_type_from_cpes_and_purls(cpes, purls)
         ### CDX 1.6
         elif (
-            self.sbom_format is SBOMFormat.CYCLONEDX16
-            or self.sbom_format in get_fallbacks(SBOMFormat.CYCLONEDX16)
+            self.sbom_format is SBOMFormat.CYCLONEDX16  # type: ignore[attr-defined]
+            or self.sbom_format in get_fallbacks(SBOMFormat.CYCLONEDX16)  # type: ignore[attr-defined]
         ):
             main_component = self._doc.get("metadata", {}).get("component", {})
             cpes = main_component.get("cpe", [])
@@ -134,4 +137,4 @@ class Document:
                 f"It seems that file {path_to_file.absolute()} does not contain a valid mapping."
                 f"Please make sure a valid json or yaml file is provided."
             )
-        return Document(get_mapping(path_to_file))
+        return Document(get_mapping(path_to_file))  # type: ignore[arg-type]
