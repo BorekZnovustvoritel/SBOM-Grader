@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.4](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.2.3...v0.2.4) (2025-05-08)
+
+
+### Bug Fixes
+
+* Added mypy validation and fixed related warnings. ([9749a38](https://github.com/BorekZnovustvoritel/SBOM-Grader/commit/9749a381dc9ca8b52dd4b60b27da26c720624521))
+* Markdown output of grading does not include empty sections caused by not implemented rules. ([51bc16e](https://github.com/BorekZnovustvoritel/SBOM-Grader/commit/51bc16e3e508fe0a393bc8a80bf3247e920c041b))
+
 ## [0.2.3](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.2.2...v0.2.3) (2025-04-21)
 
 
