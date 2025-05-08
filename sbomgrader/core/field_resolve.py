@@ -3,8 +3,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Union, Any, Callable
-
+from typing import Union, Any, Callable, Sequence
 
 from sbomgrader.core.definitions import (
     FIELD_NOT_PRESENT,
@@ -26,8 +25,9 @@ class PathParser:
         self.ans: dict[str, list[Union[str, QueryParser]]] = defaultdict(list)
 
     def __create_field(
-        self, field: str, next_is_query: bool, relative_path: "PathParser"
+        self, field: str | int | None, next_is_query: bool, relative_path: "PathParser"
     ) -> None:
+        next_expression: None | str | QueryParser = None
         if self.__next_is_query:
             if field == "@":
                 try:
@@ -52,13 +52,17 @@ class PathParser:
                             f"This is not an index query type: '{index_query.type_}'"
                         )
                     field = index_query.value
-            next_ = QueryParser(field)
+            if field is not None:
+                next_expression = QueryParser(field)
         else:
-            next_ = field.strip()
-        self.__next_is_query = next_is_query
+            if isinstance(field, str):
+                next_expression = field.strip()
+            else:
+                next_expression = str(field)
 
-        if next_:
-            self.ans[relative_path.raw_path].append(next_)
+        self.__next_is_query = next_is_query
+        if next_expression:
+            self.ans[relative_path.raw_path].append(next_expression)
 
     def parse(
         self, relative_path: str | None = None
@@ -117,7 +121,6 @@ class PathParser:
                 buffer += char
         if buffer:
             self.__create_field(buffer, False, parsed_relative_path)
-        self.__next_is_query = None
         return self.ans[relative_path]
 
     def __eq__(self, other):
@@ -158,6 +161,7 @@ class Query:
             and (match := re.match(r"^\$\{(?P<varname>\w+)}$", self.value))
         ):
             return match.group("varname")
+        return None
 
 
 class QueryParser:
@@ -167,7 +171,7 @@ class QueryParser:
 
     def __init__(self, path: str | int):
         self._path = path
-        self.ans: dict[str, list[Query]] = defaultdict(list)
+        self.ans: dict[str | None, list[Query]] = defaultdict(list)
 
     def __eq__(self, other):
         if not isinstance(other, QueryParser):
@@ -229,10 +233,15 @@ class QueryParser:
         if field_buffer or operation_buffer or value_buffer:
             if field_buffer == "@" and not operation_buffer and not value_buffer:
                 # There is no query, just a relative symbol
+                assert relative_path_index, (
+                    f"Cannot parse relative path '{self._path}', "
+                    f"the relative index provides no usable value: {relative_path_index}"
+                )
+                current_path_index = int(relative_path_index)
                 query = Query(
                     type_=QueryType.INDEX,
                     field_path=None,
-                    value=int(relative_path_index),
+                    value=current_path_index,
                 )
             elif (
                 (m := re.fullmatch(r"\d+", field_buffer))
@@ -288,14 +297,14 @@ class Variable:
     @staticmethod
     def from_schema(schema_list: list[dict[str, Any]]) -> dict[str, "Variable"]:
         """Load a variable from a dictionary."""
-        ans = {}
+        variable_nammes_and_objects: dict[str, Variable] = {}
         if not schema_list:
-            return ans
+            return variable_nammes_and_objects
         for item in schema_list:
             name = item["name"]
             field_path = item["fieldPath"]
-            ans[name] = Variable(name, field_path)
-        return ans
+            variable_nammes_and_objects[name] = Variable(name, field_path)
+        return variable_nammes_and_objects
 
     @property
     def is_relative(self) -> bool:
@@ -374,7 +383,7 @@ class FieldResolver:
 
     def __find_dependencies_for_subset(
         self,
-        subset_of_variables: list[str],
+        subset_of_variables: list[str] | set[str],
         already_resolved: set[str] | dict[str, Any],
     ) -> set[str]:
         """Returns dependencies for a subset of variables."""
@@ -404,9 +413,9 @@ class FieldResolver:
         self,
         whole_doc: dict[str, Any],
         path_to_instance: str | None = None,
-        already_resolved_variables: dict[str, list[Any]] = None,
+        already_resolved_variables: dict[str, list[Any]] | None = None,
         warning_on: bool = True,
-        variables_needed: list[str] | set[str] = None,
+        variables_needed: list[str] | set[str] | None = None,
         path_prefix: str = "",
     ) -> dict[str, list[Any]]:
         """
@@ -478,7 +487,7 @@ class FieldResolver:
                 resolved_variables[var_name].append(value)
 
             path = vars_to_resolve[var_name].path_parser.parse(path_to_instance)
-            variables_needed = self.__cast_vars_to_sets(
+            variable_values = self.__cast_vars_to_sets(
                 {
                     dep_name: dep_value
                     for dep_name, dep_value in resolved_variables.items()
@@ -489,7 +498,7 @@ class FieldResolver:
                 self._run_on_path(
                     whole_doc,
                     path,
-                    variables_needed,
+                    variable_values,
                     path_prefix,
                     add_to_variable,
                     False,
@@ -506,8 +515,8 @@ class FieldResolver:
 
     @staticmethod
     def __add_at_path(
-        mutable_doc: dict[str, Any],
-        path_remaining: list[str | QueryParser | PathParser],
+        mutable_doc: dict[Any, Any] | list[Any],
+        path_remaining: Sequence[str | QueryParser | PathParser],
     ):
         if path_remaining:
             step = path_remaining[0]
@@ -515,10 +524,10 @@ class FieldResolver:
             return
         if path_remaining[1:] and isinstance(path_remaining[1], str):
             # Add a dict
-            mutable_doc[step] = {}
+            mutable_doc[step] = {}  # type: ignore[call-overload]
         if path_remaining[1:] and isinstance(path_remaining[1], QueryParser):
             # Add a list
-            mutable_doc[step] = []
+            mutable_doc[step] = []  # type: ignore[call-overload]
 
     @staticmethod
     def __cast_vars_to_sets(
@@ -529,7 +538,7 @@ class FieldResolver:
         sets of values. Leaves the original value
         if it contains unhashable objects.
         """
-        new_variables = {}
+        new_variables: dict[str, list[Any] | set[Any]] = {}
         for var_name in variables:
             try:
                 new_value = set(variables[var_name])
@@ -540,8 +549,8 @@ class FieldResolver:
 
     def _run_on_path(
         self,
-        doc_: Union[dict, list[Any], FIELD_NOT_PRESENT],
-        path: list[str | QueryParser | PathParser],
+        doc_: Any,
+        path: Sequence[str | QueryParser | PathParser],
         variable_values: dict[str, list[Any] | set[Any]],
         path_tried: str,
         func_to_run: Callable[[Any, str], Any],
@@ -622,7 +631,7 @@ class FieldResolver:
                         can_fail_for_some = True
                     continue
                 elif query.type_ is QueryType.INDEX:
-                    to_use.append({query.value})
+                    to_use.append({query.value})  # type: ignore[arg-type]
                     continue
                 # Actually filter the list
                 to_use_in_query = set()
@@ -645,7 +654,7 @@ class FieldResolver:
                             )
                         else:
                             func = lambda x: isinstance(x, str) and x.startswith(
-                                query.value
+                                query.value  # type: ignore[arg-type]
                             )
                     elif query.type_ is QueryType.ENDSWITH:
                         if varname:
@@ -654,7 +663,7 @@ class FieldResolver:
                             )
                         else:
                             func = lambda x: isinstance(x, str) and x.endswith(
-                                query.value
+                                query.value  # type: ignore[arg-type]
                             )
                     elif query.type_ is QueryType.CONTAINS:
                         if varname:
@@ -662,14 +671,14 @@ class FieldResolver:
                                 val in x for val in variable_values[varname]
                             )
                         else:
-                            func = lambda x: isinstance(x, str) and query.value in x
+                            func = lambda x: isinstance(x, str) and query.value in x  # type: ignore[operator]
                     elif query.type_ is QueryType.NOT_CONTAINS:
                         if varname:
                             func = lambda x: isinstance(x, str) and all(
                                 val not in x for val in variable_values[varname]
                             )
                         else:
-                            func = lambda x: isinstance(x, str) and query.value not in x
+                            func = lambda x: isinstance(x, str) and query.value not in x  # type: ignore[operator]
                     final_func = lambda x, _: (
                         to_use_in_query.add(idx) if func(x) else None
                     )
@@ -751,7 +760,7 @@ class FieldResolver:
     def __populate_variables(
         self,
         doc: dict[str, Any],
-        fallback_values: dict[str, Any],
+        fallback_values: dict[str, Any] | None,
         field_path: list[str | QueryParser] | str | PathParser,
         allow_fail: bool = False,
         prefer_fallback: bool = False,
@@ -765,7 +774,7 @@ class FieldResolver:
         if prefer_fallback:
             args["already_resolved_variables"] = fallback_values
         variables = {} if not fallback_values else {**fallback_values}
-        variables.update(self.resolve_variables(**args))
+        variables.update(self.resolve_variables(**args))  # type: ignore[arg-type]
         return variables
 
     def run_func(

@@ -3,7 +3,7 @@ import sys
 from copy import copy
 from dataclasses import fields, dataclass, field
 from pathlib import Path
-from typing import Iterable, Any
+from typing import Iterable, Any, Generator
 
 import jsonschema.exceptions
 import yaml
@@ -45,7 +45,7 @@ class CookbookBundleResult:
                     lambda x: x.cookbook.name == decisive_cookbook,
                     self.cookbook_results,
                 ),
-                None,
+                None,  # type: ignore[arg-type]
             )
             if cookbook_result is not None:
                 return cookbook_result.grade
@@ -53,10 +53,17 @@ class CookbookBundleResult:
         return sorted(grades, key=lambda x: ord(x.value))[-1]
 
     def to_dict(self) -> dict[str, Any]:
-        ans = {"cookbook_results": [], "grade": self.grade.value}
+        """
+        Dumps the result into a dictionary.
+        :return: The dictionary representation of self.
+        """
+        result_dict: dict[str, Any] = {
+            "cookbook_results": [],
+            "grade": self.grade.value,
+        }
         for cookbook_result in self.cookbook_results:
-            ans["cookbook_results"].append(cookbook_result.to_dict())
-        return ans
+            result_dict["cookbook_results"].append(cookbook_result.to_dict())
+        return result_dict
 
     def __iter__(self):
         yield from self.cookbook_results
@@ -102,10 +109,15 @@ class CookbookBundle:
         return ruleset
 
     def __call__(self, doc: Document) -> CookbookBundleResult:
+        """
+        Execute the CookbookBundle on an SBOM object instance.
+        :param doc: SBOM Document.
+        :return: Result of running the Cookbook.
+        """
         result = self.ruleset(doc)
         ans = []
         for cookbook in self.cookbooks:
-            kwargs = {}
+            kwargs: dict[str, dict[Any, Any] | set[Any]] = {}
             for attr_obj in fields(Result):
                 attr = attr_obj.name
                 attr_value = getattr(result, attr)
@@ -115,7 +127,7 @@ class CookbookBundle:
                     }
                 else:
                     kwargs[attr] = {v for v in attr_value if v in cookbook}
-            new_result = Result(**kwargs)
+            new_result = Result(**kwargs)  # type: ignore[arg-type]
             ans.append(CookbookResult(new_result, cookbook))
         return CookbookBundleResult(self, ans)
 
@@ -155,5 +167,5 @@ class CookbookBundle:
             return new_bundle
         raise TypeError(f"Cannot add types Cookbook and {type(other)}.")
 
-    def __iter__(self) -> Cookbook:
+    def __iter__(self) -> Generator[Cookbook, None, None]:
         yield from self.cookbooks

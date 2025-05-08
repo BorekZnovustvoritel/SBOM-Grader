@@ -1,4 +1,5 @@
 import enum
+from enum import EnumType
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,9 @@ def _load_formats_file(
     type[enum.Enum], dict[enum.Enum, dict[str, Any]], dict[enum.Enum, set[enum.Enum]]
 ]:
     format_dict = get_mapping(path, FORMAT_VALIDATION_SCHEMA_PATH)
+    assert (
+        format_dict is not None
+    ), f"Please provide a valid format dict in the file '{path}'."
     enum_dict = {}
     expected_fields_dict = {}
     fallback_dict = {}
@@ -20,7 +24,7 @@ def _load_formats_file(
         value = format_def["value"]
         enum_dict[name] = value
 
-    ans_enum = enum.Enum("Formats", enum_dict)
+    ans_enum = enum.Enum("Formats", enum_dict)  # type: ignore[misc]
 
     for format_def in format_dict["formats"]:
         name = format_def["name"]
@@ -38,6 +42,6 @@ SBOMFormat, SBOM_FORMAT_DEFINITION_MAPPING, SBOM_FORMAT_FALLBACK = _load_formats
 )
 
 
-def get_fallbacks(format_: SBOMFormat) -> set[SBOMFormat]:
+def get_fallbacks(format_: enum.Enum) -> set[enum.Enum]:
     """Get formats that are considered a fallback for the provided format."""
     return SBOM_FORMAT_FALLBACK[format_]

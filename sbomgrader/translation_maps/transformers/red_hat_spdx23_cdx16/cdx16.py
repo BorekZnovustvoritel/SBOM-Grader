@@ -23,7 +23,7 @@ def bom_ref_to_spdxid(bom_ref: str, component_name_var: list[str]) -> str:
         if name and name is not FIELD_NOT_PRESENT:
             bom_ref = name
         else:
-            bom_ref = base64.b64encode(uuid.uuid4().bytes)
+            bom_ref = base64.b64encode(uuid.uuid4().bytes).decode()
 
     _CACHE[bom_ref] = f"SPDXRef-{re.sub(r"[^A-Za-z\d.-]", "-", bom_ref)}"
     return _CACHE[bom_ref]
@@ -41,12 +41,13 @@ def url_to_namespace(
 ) -> str:
     if not url or not isinstance(url, str):
         url = "https://github.com/BorekZnovustvoritel/SBOM-Grader"
-    end_string = urllib.parse.quote_plus(
-        next(iter(component_name_var), FIELD_NOT_PRESENT)
-        + "/"
-        + next(iter(serial_no_var), FIELD_NOT_PRESENT)
-    )
-
+    component_name = next(iter(component_name_var), FIELD_NOT_PRESENT)
+    if not isinstance(component_name, str):
+        component_name = base64.b64encode(uuid.uuid4().bytes).decode()
+    serial_number = next(iter(serial_no_var), FIELD_NOT_PRESENT)
+    if not isinstance(serial_number, str):
+        base64.b64encode(uuid.uuid4().bytes).decode()
+    end_string = urllib.parse.quote_plus(component_name + "/" + serial_number)
     return url + "/" + end_string
 
 

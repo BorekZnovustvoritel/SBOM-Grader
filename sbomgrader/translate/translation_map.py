@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
@@ -61,12 +62,13 @@ class Data:
         path_to_instance: str | None,
         instance_value: Any,
         prune_empty: bool = True,
-        globally_resolved_variables: dict[str, list[Any]] = None,
+        globally_resolved_variables: dict[str, list[Any]] | None = None,
     ) -> Any:
         """
         Renders a Jinja2 expression according to variables
         populated from the document.
         """
+        path_to_instance = "" if path_to_instance is None else path_to_instance
         globally_resolved_variables = globally_resolved_variables or {}
         already_resolved_vars = {**globally_resolved_variables}
         relative_resolver = FieldResolver(
@@ -112,14 +114,14 @@ class Chunk:
     def __init__(
         self,
         name: str,
-        first_format: SBOMFormat,
-        second_format: SBOMFormat,
+        first_format: Enum,
+        second_format: Enum,
         first_data: Data | None,
         second_data: Data | None,
         first_field_path: str,
         second_field_path: str,
-        first_variables: dict[str, Variable] = None,
-        second_variables: dict[str, Variable] = None,
+        first_variables: dict[str, Variable] | None = None,
+        second_variables: dict[str, Variable] | None = None,
     ):
         self.name = name
         self.first_format = first_format
@@ -133,7 +135,7 @@ class Chunk:
         self.first_resolver = FieldResolver(self.first_variables)
         self.second_resolver = FieldResolver(self.second_variables)
 
-    def _first_or_second(self, sbom_format: SBOMFormat) -> str:
+    def _first_or_second(self, sbom_format: Enum) -> str:
         if sbom_format == self.first_format or self.first_format in get_fallbacks(
             sbom_format
         ):
@@ -144,24 +146,24 @@ class Chunk:
             return "second_"
         raise ValueError(f"This map does not support format {sbom_format}!")
 
-    def _other(self, sbom_format: SBOMFormat) -> SBOMFormat:
+    def _other(self, sbom_format: Enum) -> Enum:
         if sbom_format == self.first_format:
             return self.second_format
         if sbom_format == self.second_format:
             return self.first_format
         raise ValueError(f"This map does not support format {sbom_format}!")
 
-    def data_for(self, sbom_format: SBOMFormat) -> Data:
+    def data_for(self, sbom_format: Enum) -> Data:
         return getattr(self, f"{self._first_or_second(sbom_format)}data")
 
-    def field_path_for(self, sbom_format: SBOMFormat) -> str | None:
+    def field_path_for(self, sbom_format: Enum) -> str:
         return getattr(self, f"{self._first_or_second(sbom_format)}field_path")
 
-    def resolver_for(self, sbom_format: SBOMFormat) -> FieldResolver:
+    def resolver_for(self, sbom_format: Enum) -> FieldResolver:
         return getattr(self, f"{self._first_or_second(sbom_format)}resolver")
 
     def occurrences(
-        self, doc: Document, fallback_variables: dict[str, Any] = None
+        self, doc: Document, fallback_variables: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Returns a list of objects and string fieldPaths where the element occurs."""
         fallback_variables = fallback_variables or {}
@@ -193,7 +195,7 @@ class Chunk:
         self,
         orig_doc: Document,
         new_doc: dict[str, Any],
-        globally_resolved_variables: dict[str, list[Any]] = None,
+        globally_resolved_variables: dict[str, list[Any]] | None = None,
     ) -> None:
         """Mutates the new_doc with the occurrences of this chunk."""
         convert_from = orig_doc.sbom_format
@@ -249,36 +251,39 @@ class TranslationMap:
 
     def __init__(
         self,
-        first: SBOMFormat,
-        second: SBOMFormat,
+        first: Enum,
+        second: Enum,
         chunks: list[Chunk],
         first_variables: dict[str, Variable],
         second_variables: dict[str, Variable],
-        preprocessing_funcs: dict[SBOMFormat, list[Callable]] = None,
-        postprocessing_funcs: dict[SBOMFormat, list[Callable]] = None,
+        preprocessing_funcs: dict[Enum, list[Callable]] | None = None,
+        postprocessing_funcs: dict[Enum, list[Callable]] | None = None,
     ):
         self.first = first
         self.second = second
         self.chunks = chunks
         self.first_variables = first_variables or {}
         self.second_variables = second_variables or {}
-        self.preprocessing_funcs: dict[SBOMFormat, list[Callable[[dict], Any]]] = (
+        self.preprocessing_funcs: dict[Enum, list[Callable[[dict], Any]]] = (
             preprocessing_funcs or {}
         )
-        self.postprocessing_funcs: dict[
-            SBOMFormat, list[Callable[[dict, dict], Any]]
-        ] = (postprocessing_funcs or {})
+        self.postprocessing_funcs: dict[Enum, list[Callable[[dict, dict], Any]]] = (
+            postprocessing_funcs or {}
+        )
 
     @staticmethod
     def from_file(file: str | Path) -> "TranslationMap":
         """Load the Translation Map from a file."""
         schema_dict = get_mapping(file, TRANSLATION_MAP_VALIDATION_SCHEMA_PATH)
+        assert (
+            schema_dict is not None
+        ), f"Could not load TranslationMap from file '{file}'."
 
         first = SBOMFormat(schema_dict["first"])
         second = SBOMFormat(schema_dict["second"])
 
-        first_glob_var = schema_dict.get("firstVariables")
-        second_glob_var = schema_dict.get("secondVariables")
+        first_glob_var: list[dict[str, Any]] = schema_dict.get("firstVariables")  # type: ignore[assignment]
+        second_glob_var: list[dict[str, Any]] = schema_dict.get("secondVariables")  # type: ignore[assignment]
 
         first_transformer_file = get_path_to_module(file, "Transformer", "first", first)
         first_glob_var_initialized = Variable.from_schema(first_glob_var)
@@ -323,8 +328,8 @@ class TranslationMap:
             )
             chunks.append(chunk)
 
-        preprocessing_dict = {}
-        postprocessing_dict = {}
+        preprocessing_dict: dict[Enum, list[Callable[[Any, Any], Any]]] = {}
+        postprocessing_dict: dict[Enum, list[Callable[[Any, Any], Any]]] = {}
         for dict_of_functions, kind in (
             (preprocessing_dict, "Preprocessing"),
             (postprocessing_dict, "Postprocessing"),
@@ -337,11 +342,11 @@ class TranslationMap:
                     # There are no functions required by the TranslationMap
                     continue
                 dict_of_functions[sbom_format] = []
-                py_file = get_path_to_module(file, kind, first_or_second, sbom_format)
+                py_file = get_path_to_module(file, kind, first_or_second, sbom_format)  # type: ignore[arg-type]
                 python_loader = PythonLoader(py_file)
                 for func_name in required_funcs:
                     dict_of_functions[sbom_format].append(
-                        python_loader.load_func(func_name)
+                        python_loader.load_func(func_name)  # type: ignore[arg-type]
                     )
 
         return TranslationMap(
@@ -354,25 +359,24 @@ class TranslationMap:
             postprocessing_dict,
         )
 
-    def _output_format(self, doc: Document) -> SBOMFormat:
+    def _output_format(self, doc: Document) -> Enum:
         for form in self.first, self.second:
             if doc.sbom_format is not form and not any(
                 doc.sbom_format == fallback for fallback in get_fallbacks(form)
             ):
                 return form
+        raise ValueError(f"Cannot do anything with this format: {doc.sbom_format}.")
 
-    def _input_format(self, doc: Document) -> SBOMFormat:
+    def _input_format(self, doc: Document) -> Enum:
         for form in self.first, self.second:
             if doc.sbom_format is form:
                 return form
         for form in self.first, self.second:
             if doc.sbom_format in get_fallbacks(form):
                 return form
-        raise ValueError(f"Cannot do anything with this format: {doc.sbom_format}")
+        raise ValueError(f"Cannot do anything with this format: {doc.sbom_format}.")
 
-    def convert(
-        self, sbom: Document, override_format: SBOMFormat | None = None
-    ) -> Document:
+    def convert(self, sbom: Document, override_format: Enum | None = None) -> Document:
         """
         Converts document to the specified format.
         :argument sbom: Sbom document to convert.
@@ -380,7 +384,7 @@ class TranslationMap:
         If omitted, the format is chosen from values self.first or
         self.second. The value not associated with input document will be used.
         """
-        new_data = {}
+        new_data: dict[str, Any] = {}
         assert sbom.sbom_format in (
             self.first,
             self.second,
@@ -429,13 +433,13 @@ class TranslationMap:
             new_data.update(SBOM_FORMAT_DEFINITION_MAPPING[override_format])
         return Document(new_data)
 
-    def is_exact_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+    def is_exact_map(self, from_: Enum, to: Enum) -> bool:
         """Determine if this map converts between these two formats."""
         return ((from_ is self.first) and (to is self.second)) or (
             (from_ is self.second) and (to is self.first)
         )
 
-    def is_suitable_map(self, from_: SBOMFormat, to: SBOMFormat) -> bool:
+    def is_suitable_map(self, from_: Enum, to: Enum) -> bool:
         """Determine if the map is able to convert between formats including fallbacks."""
         if self.is_exact_map(from_, to):
             return True

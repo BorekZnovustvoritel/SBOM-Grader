@@ -108,15 +108,18 @@ class CookbookResult:
         return yaml.dump(self.to_dict())
 
     def to_dict(self) -> dict[str, Any]:
-        ans = {"cookbook_name": self.cookbook.name, "grade": self.grade.value}
+        dict_result: dict[str, Any] = {
+            "cookbook_name": self.cookbook.name,
+            "grade": self.grade.value,
+        }
         for force in RuleForce:
-            ans[force.value] = {}
+            dict_result[force.value] = {}
             for result_detail in self.__get_by_force(force):
-                ans[force.value][result_detail.rule_name] = {}
-                ans[force.value][result_detail.rule_name][
+                dict_result[force.value][result_detail.rule_name] = {}
+                dict_result[force.value][result_detail.rule_name][
                     result_detail.result_type.value
                 ] = result_detail.result_detail
-        return ans
+        return dict_result
 
 
 class Cookbook:
@@ -130,7 +133,7 @@ class Cookbook:
     ):
         self.name = name
         self.ruleset_names = ruleset_names
-        self._initialized_ruleset: RuleSet | None = None
+        self._initialized_ruleset: RuleSet = RuleSet()
         self.__is_initialized: bool = False
         self.must = set(must)
         self.should = set(should)
@@ -138,7 +141,7 @@ class Cookbook:
 
     @property
     def ruleset(self) -> RuleSet:
-        self.initialize()
+        self._initialize()
         return self._initialized_ruleset
 
     def __contains__(self, item):
@@ -154,7 +157,7 @@ class Cookbook:
             selected_rules.update(type_)
         return selected_rules
 
-    def initialize(self):
+    def _initialize(self):
         if self.__is_initialized:
             return
         self._initialized_ruleset = RuleSet()
@@ -180,6 +183,7 @@ class Cookbook:
         file_path = Path(file_path)
         try:
             schema_dict = get_mapping(file_path, COOKBOOK_VALIDATION_SCHEMA_PATH)
+            assert schema_dict
         except jsonschema.exceptions.ValidationError as e:
             print(
                 f"Could not parse Cookbook from file {file_path.absolute()}",
@@ -200,7 +204,6 @@ class Cookbook:
         dir_path = Path(dir_path)
         ans = []
         for entity in dir_path.iterdir():
-            entity: Path
             if not entity.is_file():
                 continue
             if not any(entity.name.endswith(ext) for ext in COOKBOOK_EXTENSIONS):
@@ -209,7 +212,7 @@ class Cookbook:
         return ans
 
     def __call__(self, document: dict | Document) -> CookbookResult:
-        self.initialize()
+        self._initialize()
         res = self._initialized_ruleset(document)
         cook_res = CookbookResult(res, self)
         return cook_res
