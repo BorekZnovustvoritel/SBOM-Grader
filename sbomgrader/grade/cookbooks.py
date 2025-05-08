@@ -82,7 +82,12 @@ class CookbookResult:
             ans += f"\nAchieved grade: {self.grade.value}\n"
             for force in RuleForce:
                 rules_in_force = self.__get_by_force(force)
-                if not rules_in_force:
+                implemented_rules_in_force = [
+                    res_detail
+                    for res_detail in rules_in_force
+                    if res_detail.result_type not in {ResultType.NOT_APPLICABLE}
+                ]
+                if not implemented_rules_in_force:
                     continue
                 ans += f"\n### {force.value}:\n\n"
                 for result_detail in rules_in_force:
