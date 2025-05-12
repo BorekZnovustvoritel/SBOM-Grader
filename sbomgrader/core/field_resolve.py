@@ -856,49 +856,6 @@ class FieldResolver:
             len(ran_on) >= minimal_runs
         ), "Test was not performed on any fields because no fields match given filters."
 
-    def get_paths(
-        self,
-        doc: dict[str, Any],
-        field_path: str | list[Union[str, QueryParser]],
-        fallback_variables: dict[str, Any],
-        prefer_fallback: bool = False,
-        path_prefix: str = "",
-    ) -> list[str]:
-        """
-        Get paths to occurrences of fields matching the general expressions.
-        Returns a list of concrete expressions (all indexes in a list are returned
-        separately).
-        :argument doc: The document to evaluate this expression on.
-        :argument field_path: The FieldPath expression.
-        :argument fallback_variables: The already-resolved variable values in
-        the format {"var_name": [var_value1, var_value2,...]}
-        :argument prefer_fallback: If set to `True`, fallback variables will not be overridden.
-        This improves performance. Default is `False`.
-        :argument path_prefix: Optionally provide a path that will be prepended to each "path tried".
-        :return: a list of concrete occurrences (paths in the string format).
-        """
-        parsed_path = self.ensure_field_path(field_path)
-        resolved_variables = self.__cast_vars_to_sets(
-            self.__populate_variables(
-                doc, fallback_variables, parsed_path, prefer_fallback
-            )
-        )
-        try:
-
-            paths = set()
-            self._run_on_path(
-                doc,
-                parsed_path,
-                resolved_variables,
-                path_prefix,
-                lambda _, path: paths.add(path),
-                False,
-                False,
-            )
-            return list(paths)
-        except FieldNotPresentError:
-            return []
-
     def get_objects(
         self,
         doc: dict[str, Any],
@@ -946,8 +903,15 @@ class FieldResolver:
     ) -> dict[str, Any]:
         """
         Retrieves a dictionary of absolute paths and values
-        on these paths according to
+        on these paths according to field_path query.
+        Args:
+            doc: SBOM document or its part.
+            field_path: FieldPath Query.
+            fallback_variables: Pre-populated variables.
+            path_prefix: If this is not the document root, specify current path for proper debug.
 
+        Returns:
+            Dictionary of absolute paths (strings) and objects located there.
         """
         parsed_path = self.ensure_field_path(field_path)
         resolved_variables = self.__cast_vars_to_sets(
