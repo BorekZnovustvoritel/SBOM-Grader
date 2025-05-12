@@ -1,4 +1,5 @@
 import json
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,8 @@ from sbomgrader.core.definitions import (
     COOKBOOK_EXTENSIONS,
 )
 from sbomgrader.grade.rules import RuleSet, Document, Result, ResultDetail
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -190,10 +193,6 @@ class Cookbook:
             schema_dict = get_mapping(file_path, COOKBOOK_VALIDATION_SCHEMA_PATH)
             assert schema_dict
         except jsonschema.exceptions.ValidationError as e:
-            print(
-                f"Could not parse Cookbook from file {file_path.absolute()}",
-                file=sys.stderr,
-            )
             raise e
 
         return Cookbook(
@@ -213,7 +212,13 @@ class Cookbook:
                 continue
             if not any(entity.name.endswith(ext) for ext in COOKBOOK_EXTENSIONS):
                 continue
-            ans.append(Cookbook.from_file(entity))
+            try:
+                ans.append(Cookbook.from_file(entity))
+            except jsonschema.exceptions.ValidationError as e:
+                LOGGER.warning(
+                    f"Could not load Cookbook file {entity.absolute()}, validation failed."
+                )
+                LOGGER.debug("Exception info: ", exc_info=e)
         return ans
 
     def __call__(self, document: dict | Document) -> CookbookResult:

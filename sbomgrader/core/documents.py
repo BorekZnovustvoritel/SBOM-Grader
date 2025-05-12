@@ -26,7 +26,7 @@ class Document:
                 self._doc.get(key) == value for key, value in field_to_check.items()
             ):
                 return item
-        raise NotImplementedError("Document is in an unsupported standard.")
+        raise NotImplementedError("Document standard and/or version is not supported.")
 
     @property
     def sbom_format_fallback(self) -> set[Enum]:

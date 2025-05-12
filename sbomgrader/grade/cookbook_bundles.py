@@ -1,4 +1,5 @@
 import json
+import logging
 import sys
 from copy import copy
 from dataclasses import fields, dataclass, field
@@ -13,6 +14,9 @@ from sbomgrader.core.definitions import COOKBOOKS_DIR
 from sbomgrader.core.documents import Document
 from sbomgrader.core.enums import SBOMType, SBOMTime, OutputType, Grade
 from sbomgrader.grade.rules import RuleSet, Result
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -78,19 +82,8 @@ class CookbookBundle:
 
     @staticmethod
     def from_directory(dir_path: Path) -> "CookbookBundle":
-        cookbook_bundle = CookbookBundle([])
-        if dir_path.is_dir():
-            for entity in dir_path.iterdir():
-                if not entity.is_file() or (
-                    not entity.name.endswith(".yml")
-                    and not entity.name.endswith(".yaml")
-                ):
-                    continue
-                try:
-                    cookbook_bundle += Cookbook.from_file(entity)
-                except jsonschema.exceptions.ValidationError:
-                    print(f"Could not load file {entity.absolute()}", file=sys.stderr)
-        return cookbook_bundle
+        cookbooks = Cookbook.from_directory(dir_path)
+        return CookbookBundle(cookbooks)
 
     @property
     def all_rules(self) -> set[str]:

@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import sys
 from enum import Enum
 from json import JSONDecodeError
@@ -15,6 +16,8 @@ from sbomgrader.core.cached_python_loader import PythonLoader
 from sbomgrader.core.definitions import FIELD_NOT_PRESENT, TIME_ISO_FORMAT_STRING
 from sbomgrader.core.enums import Grade
 from sbomgrader import __version__ as version
+
+LOGGER = logging.getLogger(__name__)
 
 
 def is_mapping(file: str | Path) -> bool:
@@ -190,9 +193,8 @@ def create_jinja_env(transformer_file: Path | None = None) -> jinja2.Environment
             python_loader = PythonLoader(transformer_file)
             func_to_run = python_loader.load_func(name)
             if func_to_run is None:
-                print(
-                    f"Could not run function {name}, it is not located in {transformer_file}!",
-                    file=sys.stderr,
+                LOGGER.warning(
+                    f"Could not run function {name}, it is not located in {transformer_file}!"
                 )
                 return
             return func_to_run(item, **kwargs)

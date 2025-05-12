@@ -1,8 +1,11 @@
+import logging
 import sys
 from pathlib import Path
 
 from runpy import run_path
 from typing import Callable, Union
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PythonLoader:
@@ -40,8 +43,7 @@ class PythonLoader:
         if self._unloaded_file_references:
             self._load_all_references()
         if name not in self.__functions:
-            print(
-                f"Could not load transformer {name} from files {self.file_references}.",
-                file=sys.stderr,
+            LOGGER.warning(
+                f"Could not load transformer {name} from files {self.file_references}."
             )
         return self.__functions.get(name, None)
