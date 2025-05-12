@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.2.4...v0.2.5) (2025-05-12)
+
+
+### Features
+
+* Utilize logging instead of printing ([#29](https://github.com/BorekZnovustvoritel/SBOM-Grader/issues/29)) ([b57dac0](https://github.com/BorekZnovustvoritel/SBOM-Grader/commit/b57dac0c93358b971f50a30db7a881a101b1967a))
+
 ## [0.2.4](https://github.com/BorekZnovustvoritel/SBOM-Grader/compare/v0.2.3...v0.2.4) (2025-05-08)
 
 
