@@ -1,4 +1,4 @@
-import sys
+import logging
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from enum import Enum
@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from sbomgrader.core.formats import SBOMFormat
+from sbomgrader.core.logging import setup_logger
 from sbomgrader.grade.choose_cookbooks import select_cookbook_bundle
 from sbomgrader.grade.cookbook_bundles import CookbookBundle
 from sbomgrader.grade.cookbooks import Cookbook
@@ -17,6 +18,8 @@ from sbomgrader.core.enums import Grade, SBOMTime, OutputType, SBOMType
 from sbomgrader.core.utils import get_mapping, validation_passed
 from sbomgrader.translate.choose_map import choose_map, get_all_map_list_markdown
 from sbomgrader.translate.translation_map import TranslationMap
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _input_format(arg: str) -> dict[str, Any]:
@@ -27,7 +30,7 @@ def _input_format(arg: str) -> dict[str, Any]:
     """
     mapping = get_mapping(arg)
     if not mapping:
-        print("Could not read SBOM from input or file!", file=sys.stderr)
+        LOGGER.error("Could not read SBOM from input or file!")
         exit(1)
     return mapping
 
@@ -47,7 +50,8 @@ def _safe_load_doc(mapping: dict[str, Any]) -> Document:
         assert doc.sbom_format
         return doc
     except NotImplementedError as e:
-        print("An error occurred: " + " ".join(e.args), file=sys.stderr)
+        LOGGER.error("Please supply a valid and supported SBOM!")
+        LOGGER.debug("Problem info: ", exc_info=e)
         exit(1)
 
 
@@ -126,7 +130,7 @@ def grade(config: GradeConfig) -> None:
     if config.cookbook_references:
         cookbook_bundle = select_cookbook_bundle(config.cookbook_references)
         if not cookbook_bundle.cookbooks:
-            print("No cookbook(s) could be found.", file=sys.stderr)
+            LOGGER.error("No cookbook(s) could be found.")
             exit(1)
     else:
         # Cookbooks weren't specified, using defaults
@@ -239,7 +243,16 @@ def list_(config: ListConfig):
 
 
 def main():
+    # Temporary logger for errors & warnings stemming from argument parsing
+    setup_logger()
     parser = ArgumentParser("sbomgrader")
+    parser.add_argument(
+        "-v",
+        "--verbosity",
+        action="count",
+        default=0,
+        help="Set the verbosity level of the application.",
+    )
     subparsers = parser.add_subparsers(required=True, dest="command")
     grade_parser = subparsers.add_parser("grade")
     create_grade_parser(grade_parser)
@@ -248,6 +261,7 @@ def main():
     list_parser = subparsers.add_parser("list")
     create_list_parser(list_parser)
     args = parser.parse_args()
+    setup_logger(verbosity_level=args.verbosity, overwrite_handlers=True)
 
     map_ = {
         "grade": (grade, GradeConfig),

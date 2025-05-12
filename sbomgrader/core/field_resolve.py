@@ -1,5 +1,5 @@
+import logging
 import re
-import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
@@ -14,6 +14,8 @@ from sbomgrader.core.definitions import (
     VAR_REF_REGEX,
 )
 from sbomgrader.core.enums import QueryType
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PathParser:
@@ -37,7 +39,7 @@ class PathParser:
                 except IndexError:
                     raise ValueError(
                         f"Problem parsing path '{self._path}' with relative hint '{relative_path.raw_path}'. "
-                        f"The relative hint is too short!"
+                        f"The relative path hint is too short!"
                     )
                 if isinstance(appropriate_relative_field, QueryParser):
                     index_query = next(iter(appropriate_relative_field.parse()), None)
@@ -69,8 +71,12 @@ class PathParser:
     ) -> list[Union[str, "QueryParser"]]:
         """
         Returns a list of dictionary field names and queries for list filtering.
-        :argument relative_path: Used to populate "relative" fields
-        (relative path has the '@' symbol).
+        Args:
+            relative_path:
+                Used to populate "relative" fields
+                (relative path has the '@' symbol).
+
+        Returns: Parsed path (a list of strings or QueryParsers)
         """
         relative_path = relative_path or ""
         if relative_path in self.ans:
@@ -113,14 +119,18 @@ class PathParser:
                     buffer += char
             elif char == ".":
                 if not in_block:
+                    # Field delimiter found
                     self.__create_field(buffer, False, parsed_relative_path)
                     buffer = ""
                 else:
+                    # Field delimiter is just a part of subquery, ignoring
                     buffer += char
             else:
                 buffer += char
         if buffer:
             self.__create_field(buffer, False, parsed_relative_path)
+        if in_block:
+            raise ValueError(f"Unmatched '[' in query '{self._path}'!")
         return self.ans[relative_path]
 
     def __eq__(self, other):
@@ -504,11 +514,12 @@ class FieldResolver:
                     False,
                 )
             except Exception as e:
+                problem_string = f"Could not parse variable {var_name}."
                 if warning_on:
-                    print(
-                        f"Could not parse variable {var_name}, problem: {str(e)}",
-                        file=sys.stderr,
-                    )
+                    LOGGER.warning(problem_string)
+                else:
+                    LOGGER.debug(problem_string)
+                LOGGER.debug("Problem information: ", exc_info=e)
 
             self.__mark_variable_as_resolved(dependencies, var_name)
         return resolved_variables
@@ -556,10 +567,30 @@ class FieldResolver:
         func_to_run: Callable[[Any, str], Any],
         accept_not_present_field: bool,
         create_nonexistent: bool = False,
-    ):
+    ) -> None:
         """
         This function is the main resolver. Recursively calls itself on nested fields
         to search for all occurrences.
+        Args:
+            doc_:
+                SBOM dictionary or its part (dictionary, list, string...)
+            path:
+                The parsed FieldPath that is supposed to be executed on the doc_.
+            variable_values:
+                Dictionary of variable names and their values (sets or lists) to
+                be used in the filtering.
+            path_tried:
+                String representation of the already executed path passed from parent call.
+            func_to_run:
+                The callable to execute on this piece of code.
+            accept_not_present_field:
+                States if the callable is safe to execute on the FIELD_NOT_PRESENT object.
+                Otherwise, this will raise a FieldNotPresentError if the field searched is absent.
+            create_nonexistent:
+                States if the function shall create new non-existing fields during search.
+                Used for document creation.
+        Returns:
+            None
         """
         if not accept_not_present_field and doc_ is FIELD_NOT_PRESENT:
             raise FieldNotPresentError("Field not present: ", path_tried)
@@ -825,49 +856,6 @@ class FieldResolver:
             len(ran_on) >= minimal_runs
         ), "Test was not performed on any fields because no fields match given filters."
 
-    def get_paths(
-        self,
-        doc: dict[str, Any],
-        field_path: str | list[Union[str, QueryParser]],
-        fallback_variables: dict[str, Any],
-        prefer_fallback: bool = False,
-        path_prefix: str = "",
-    ) -> list[str]:
-        """
-        Get paths to occurrences of fields matching the general expressions.
-        Returns a list of concrete expressions (all indexes in a list are returned
-        separately).
-        :argument doc: The document to evaluate this expression on.
-        :argument field_path: The FieldPath expression.
-        :argument fallback_variables: The already-resolved variable values in
-        the format {"var_name": [var_value1, var_value2,...]}
-        :argument prefer_fallback: If set to `True`, fallback variables will not be overridden.
-        This improves performance. Default is `False`.
-        :argument path_prefix: Optionally provide a path that will be prepended to each "path tried".
-        :return: a list of concrete occurrences (paths in the string format).
-        """
-        parsed_path = self.ensure_field_path(field_path)
-        resolved_variables = self.__cast_vars_to_sets(
-            self.__populate_variables(
-                doc, fallback_variables, parsed_path, prefer_fallback
-            )
-        )
-        try:
-
-            paths = set()
-            self._run_on_path(
-                doc,
-                parsed_path,
-                resolved_variables,
-                path_prefix,
-                lambda _, path: paths.add(path),
-                False,
-                False,
-            )
-            return list(paths)
-        except FieldNotPresentError:
-            return []
-
     def get_objects(
         self,
         doc: dict[str, Any],
@@ -915,8 +903,15 @@ class FieldResolver:
     ) -> dict[str, Any]:
         """
         Retrieves a dictionary of absolute paths and values
-        on these paths according to
+        on these paths according to field_path query.
+        Args:
+            doc: SBOM document or its part.
+            field_path: FieldPath Query.
+            fallback_variables: Pre-populated variables.
+            path_prefix: If this is not the document root, specify current path for proper debug.
 
+        Returns:
+            Dictionary of absolute paths (strings) and objects located there.
         """
         parsed_path = self.ensure_field_path(field_path)
         resolved_variables = self.__cast_vars_to_sets(
